@@ -254,18 +254,33 @@ export default function Home() {
         </section>
 
         <div className="mb-4 grid gap-3">
-      <div className="mb-4 grid gap-3">
-  <Link
-    href="/spielempfehlung"
-    className="rounded-2xl bg-white p-4 text-center font-bold text-[#075b3b] shadow-lg"
-  >
-    🏌️ Spielempfehlung
-  </Link>
+            <div className="mb-4 grid gap-3">
+          <Link
+            href="/spielempfehlung"
+            className="rounded-2xl bg-white p-4 text-center font-bold text-[#075b3b] shadow-lg"
+          >
+            🏌️ Spielempfehlung
+          </Link>
 
-  <Link
-    href="/regelcoach"
-    className="rounded-2xl bg-white p-4 text-center font-bold text-[#075b3b] shadow-lg"
-  >
-    ⚖️ Regel-Coach
-  </Link>
-</div>
+          <Link
+            href="/regelcoach"
+            className="rounded-2xl bg-white p-4 text-center font-bold text-[#075b3b] shadow-lg"
+          >
+            ⚖️ Regel-Coach
+          </Link>
+        </div>
+
+        <button
+          onClick={resetEverything}
+          className="mb-4 w-full rounded-2xl border border-green-200 py-3 text-sm text-green-100"
+        >
+          Scores und GPS-Daten zurücksetzen
+        </button>
+
+        <p className="pb-4 text-center text-xs text-green-200">
+          TomCaddy · GolfPark Gudensberg
+        </p>
+      </div>
+    </main>
+  );
+}
