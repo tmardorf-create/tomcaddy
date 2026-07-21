@@ -1,376 +1,235 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 
-type Position = {
-  lat: number;
-  lon: number;
-  accuracy?: number;
+type CaddyResponse = {
+  recommendation?: string;
+  error?: string;
 };
-
-type Hole = {
-  number: number;
-  par: number;
-  green?: Position;
-};
-
-const initialHoles: Hole[] = [
-  { number: 1, par: 3 },
-  { number: 2, par: 3 },
-  { number: 3, par: 3 },
-  { number: 4, par: 4 },
-  { number: 5, par: 4 },
-  { number: 6, par: 3 },
-  { number: 7, par: 3 },
-  { number: 8, par: 3 },
-  { number: 9, par: 3 },
-];
-
-const totalPar = initialHoles.reduce(
-  (sum, hole) => sum + hole.par,
-  0
-);
-
-function distanceInMeters(
-  start: Position,
-  end: Position
-) {
-  const earthRadius = 6371000;
-
-  const lat1 = (start.lat * Math.PI) / 180;
-  const lat2 = (end.lat * Math.PI) / 180;
-  const deltaLat = ((end.lat - start.lat) * Math.PI) / 180;
-  const deltaLon = ((end.lon - start.lon) * Math.PI) / 180;
-
-  const value =
-    Math.sin(deltaLat / 2) ** 2 +
-    Math.cos(lat1) *
-      Math.cos(lat2) *
-      Math.sin(deltaLon / 2) ** 2;
-
-  return Math.round(
-    earthRadius *
-      2 *
-      Math.atan2(
-        Math.sqrt(value),
-        Math.sqrt(1 - value)
-      )
-  );
-}
-
-function removeWhiteBackground(
-  image: HTMLImageElement
-): string {
-  const canvas = document.createElement("canvas");
-  const context = canvas.getContext("2d");
-
-  if (!context) {
-    return image.src;
-  }
-
-  canvas.width = image.naturalWidth;
-  canvas.height = image.naturalHeight;
-
-  context.drawImage(image, 0, 0);
-
-  const imageData = context.getImageData(
-    0,
-    0,
-    canvas.width,
-    canvas.height
-  );
-
-  const pixels = imageData.data;
-
-  for (let i = 0; i < pixels.length; i += 4) {
-    const red = pixels[i];
-    const green = pixels[i + 1];
-    const blue = pixels[i + 2];
-
-    const isWhite =
-      red > 235 &&
-      green > 235 &&
-      blue > 235;
-
-    if (isWhite) {
-      pixels[i + 3] = 0;
-    }
-  }
-
-  context.putImageData(imageData, 0, 0);
-
-  return canvas.toDataURL("image/png");
-}
 
 export default function Home() {
-  const [holes] = useState<Hole[]>(initialHoles);
-  const [currentHole, setCurrentHole] = useState(1);
-  const [scores, setScores] = useState<Record<number, number>>({});
-  const [position, setPosition] =
-    useState<Position | null>(null);
-  const [gpsActive, setGpsActive] = useState(false);
-  const [status, setStatus] = useState(
-    "GPS noch nicht aktiviert"
-  );
-  const [logoSource, setLogoSource] = useState(
-    "/tomcaddy-logo.png"
-  );
+  const [distance, setDistance] = useState("140");
+  const [par, setPar] = useState("4");
+  const [wind, setWind] = useState("Kein Wind");
+  const [lie, setLie] = useState("Fairway");
+  const [hole, setHole] = useState("1");
+  const [playerLevel, setPlayerLevel] = useState("Anfänger");
+  const [score, setScore] = useState("");
+  const [recommendation, setRecommendation] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const selectedHole =
-    holes.find((hole) => hole.number === currentHole) ??
-    holes[0];
+  async function getRecommendation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
 
-  const totalScore = useMemo(() => {
-    return Object.values(scores).reduce(
-      (sum, score) => sum + score,
-      0
-    );
-  }, [scores]);
+    setLoading(true);
+    setRecommendation("");
+    setError("");
 
-  const scoreDifference =
-    totalScore > 0 ? totalScore - totalPar : 0;
+    try {
+      const response = await fetch("/api/caddy", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          distance,
+          par,
+          wind,
+          lie,
+          hole,
+          score,
+          playerLevel,
+        }),
+      });
 
-  const distanceToGreen =
-    position && selectedHole.green
-      ? distanceInMeters(position, selectedHole.green)
-      : null;
+      const data: CaddyResponse = await response.json();
 
-  useEffect(() => {
-    const savedScores = localStorage.getItem(
-      "tomcaddy-scores"
-    );
-
-    if (savedScores) {
-      setScores(JSON.parse(savedScores));
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(
-      "tomcaddy-scores",
-      JSON.stringify(scores)
-    );
-  }, [scores]);
-
-  useEffect(() => {
-    const image = new Image();
-
-    image.onload = () => {
-      const transparentLogo =
-        removeWhiteBackground(image);
-
-      setLogoSource(transparentLogo);
-    };
-
-    image.src = "/tomcaddy-logo.png";
-  }, []);
-
-  function changeScore(amount: number) {
-    setScores((currentScores) => {
-      const currentScore =
-        currentScores[currentHole] ?? 0;
-
-      const newScore = Math.max(
-        0,
-        currentScore + amount
-      );
-
-      return {
-        ...currentScores,
-        [currentHole]: newScore,
-      };
-    });
-  }
-
-  function activateGps() {
-    if (!navigator.geolocation) {
-      setStatus(
-        "GPS wird von diesem Gerät nicht unterstützt."
-      );
-      return;
-    }
-
-    setGpsActive(true);
-    setStatus("GPS wird ermittelt …");
-
-    navigator.geolocation.getCurrentPosition(
-      (location) => {
-        setPosition({
-          lat: location.coords.latitude,
-          lon: location.coords.longitude,
-          accuracy: location.coords.accuracy,
-        });
-
-        setStatus("GPS-Position erfolgreich ermittelt");
-      },
-      () => {
-        setGpsActive(false);
-        setStatus(
-          "GPS konnte nicht abgerufen werden."
-        );
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
+      if (!response.ok || data.error) {
+        throw new Error(data.error || "TomCaddy konnte nicht antworten.");
       }
-    );
-  }
 
-  function resetEverything() {
-    setScores({});
-    setPosition(null);
-    setGpsActive(false);
-    setStatus("GPS noch nicht aktiviert");
-    localStorage.removeItem("tomcaddy-scores");
+      setRecommendation(data.recommendation || "Keine Empfehlung erhalten.");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Es ist ein unbekannter Fehler aufgetreten."
+      );
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
-    <main className="min-h-screen bg-[#06452f] px-4 py-6 text-white">
-      <div className="mx-auto max-w-md">
-        <header className="mb-6 flex justify-center">
-          <img
-            src={logoSource}
-            alt="TomCaddy Logo"
-            className="h-48 w-48 object-contain"
-          />
+    <main className="min-h-screen bg-gradient-to-b from-green-950 via-green-900 to-slate-950 px-4 py-6 text-white">
+      <div className="mx-auto max-w-xl">
+        <header className="mb-6 text-center">
+          <div className="mb-2 text-5xl">🏌️‍♂️</div>
+          <h1 className="text-4xl font-bold tracking-tight">TomCaddy</h1>
+          <p className="mt-2 text-green-100">
+            Dein KI-Caddy für den Golfplatz
+          </p>
+          <p className="mt-1 text-sm text-green-300">
+            Golfpark Gudensberg
+          </p>
         </header>
 
-        <section className="mb-4 rounded-3xl bg-white p-5 text-gray-900 shadow-lg">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500">
-                Aktuelles Loch
-              </p>
+        <form
+          onSubmit={getRecommendation}
+          className="rounded-3xl bg-white p-5 text-slate-900 shadow-2xl"
+        >
+          <h2 className="mb-4 text-xl font-bold">Spielsituation</h2>
 
-              <h1 className="text-4xl font-bold text-[#075b3b]">
-                Loch {currentHole}
-              </h1>
+          <div className="grid grid-cols-2 gap-4">
+            <label className="block">
+              <span className="mb-1 block text-sm font-semibold">
+                Entfernung
+              </span>
+              <div className="flex">
+                <input
+                  type="number"
+                  min="1"
+                  max="600"
+                  value={distance}
+                  onChange={(e) => setDistance(e.target.value)}
+                  className="w-full rounded-l-xl border border-slate-300 px-3 py-3 text-lg outline-none focus:border-green-600"
+                  required
+                />
+                <span className="flex items-center rounded-r-xl bg-slate-100 px-3 text-sm">
+                  m
+                </span>
+              </div>
+            </label>
 
-              <p className="text-sm">
-                Par {selectedHole.par}
-              </p>
-            </div>
+            <label className="block">
+              <span className="mb-1 block text-sm font-semibold">Bahn</span>
+              <input
+                type="number"
+                min="1"
+                max="18"
+                value={hole}
+                onChange={(e) => setHole(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 px-3 py-3 text-lg outline-none focus:border-green-600"
+                required
+              />
+            </label>
 
-            <div className="text-right">
-              <p className="text-sm text-gray-500">
-                Gesamtscore
-              </p>
+            <label className="block">
+              <span className="mb-1 block text-sm font-semibold">Par</span>
+              <select
+                value={par}
+                onChange={(e) => setPar(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 outline-none focus:border-green-600"
+              >
+                <option value="3">Par 3</option>
+                <option value="4">Par 4</option>
+                <option value="5">Par 5</option>
+              </select>
+            </label>
 
-              <p className="text-3xl font-bold text-[#075b3b]">
-                {totalScore || "—"}
-              </p>
-
-              {totalScore > 0 && (
-                <p className="text-xs text-gray-500">
-                  {scoreDifference > 0
-                    ? `+${scoreDifference}`
-                    : scoreDifference}
-                </p>
-              )}
-            </div>
+            <label className="block">
+              <span className="mb-1 block text-sm font-semibold">
+                Balllage
+              </span>
+              <select
+                value={lie}
+                onChange={(e) => setLie(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 outline-none focus:border-green-600"
+              >
+                <option>Fairway</option>
+                <option>Rough</option>
+                <option>Bunker</option>
+                <option>Abschlag</option>
+                <option>Gras nass</option>
+                <option>Ball liegt schlecht</option>
+              </select>
+            </label>
           </div>
 
-          <div className="mb-4 rounded-2xl bg-gray-100 p-5 text-center">
-            <p className="text-sm text-gray-500">
-              Schläge auf Loch {currentHole}
-            </p>
-
-            <p className="text-5xl font-bold text-[#075b3b]">
-              {scores[currentHole] ?? 0}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => changeScore(-1)}
-              className="rounded-2xl bg-gray-200 py-4 text-2xl font-bold text-gray-700 active:scale-95"
+          <label className="mt-4 block">
+            <span className="mb-1 block text-sm font-semibold">Wind</span>
+            <select
+              value={wind}
+              onChange={(e) => setWind(e.target.value)}
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 outline-none focus:border-green-600"
             >
-              −
-            </button>
+              <option>Kein Wind</option>
+              <option>Leichter Gegenwind</option>
+              <option>Starker Gegenwind</option>
+              <option>Leichter Rückenwind</option>
+              <option>Starker Rückenwind</option>
+              <option>Wind von links</option>
+              <option>Wind von rechts</option>
+            </select>
+          </label>
 
-            <button
-              onClick={() => changeScore(1)}
-              className="rounded-2xl bg-[#075b3b] py-4 text-2xl font-bold text-white active:scale-95"
-            >
-              +
-            </button>
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            <label className="block">
+              <span className="mb-1 block text-sm font-semibold">
+                Spielstärke
+              </span>
+              <select
+                value={playerLevel}
+                onChange={(e) => setPlayerLevel(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 outline-none focus:border-green-600"
+              >
+                <option>Anfänger</option>
+                <option>Hobbyspieler</option>
+                <option>Fortgeschritten</option>
+                <option>Sehr gut</option>
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-1 block text-sm font-semibold">
+                Aktueller Score
+              </span>
+              <input
+                type="text"
+                placeholder="z. B. +1"
+                value={score}
+                onChange={(e) => setScore(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 px-3 py-3 outline-none focus:border-green-600"
+              />
+            </label>
           </div>
-        </section>
-
-        <section className="mb-4 rounded-3xl bg-white p-5 text-gray-900 shadow-lg">
-          <h2 className="mb-3 font-bold">
-            GPS und Entfernung
-          </h2>
 
           <button
-            onClick={activateGps}
-            className="w-full rounded-2xl bg-[#075b3b] py-3 font-semibold text-white active:scale-95"
+            type="submit"
+            disabled={loading}
+            className="mt-6 w-full rounded-2xl bg-green-700 px-5 py-4 text-lg font-bold text-white transition hover:bg-green-800 disabled:cursor-not-allowed disabled:bg-slate-400"
           >
-            {gpsActive
-              ? "GPS wird ermittelt …"
-              : "GPS aktivieren"}
+            {loading ? "⏳ TomCaddy denkt nach..." : "🏌️ Schläger empfehlen"}
           </button>
+        </form>
 
-          <p className="mt-3 text-center text-sm text-gray-500">
-            {status}
-          </p>
-
-          {distanceToGreen !== null && (
-            <p className="mt-2 text-center text-xl font-bold text-[#075b3b]">
-              {distanceToGreen} m bis zum Grün
-            </p>
-          )}
-        </section>
-
-        <section className="mb-4 rounded-3xl bg-white p-5 text-gray-900 shadow-lg">
-          <h2 className="mb-3 font-bold">
-            Bahnenübersicht
-          </h2>
-
-          <div className="grid grid-cols-3 gap-2">
-            {holes.map((hole) => (
-              <button
-                key={hole.number}
-                onClick={() =>
-                  setCurrentHole(hole.number)
-                }
-                className={`rounded-2xl p-3 text-center active:scale-95 ${
-                  currentHole === hole.number
-                    ? "bg-[#075b3b] text-white"
-                    : "bg-gray-100 text-gray-900"
-                }`}
-              >
-                <div className="text-xs opacity-70">
-                  Loch
-                </div>
-
-                <div className="text-xl font-bold">
-                  {hole.number}
-                </div>
-
-                <div className="text-xs">
-                  Par {hole.par}
-                </div>
-
-                <div className="mt-1 text-lg font-bold">
-                  {scores[hole.number] ?? "—"}
-                </div>
-              </button>
-            ))}
+        {error && (
+          <div className="mt-5 rounded-2xl bg-red-100 p-4 text-red-800">
+            <strong>Fehler:</strong> {error}
           </div>
-        </section>
+        )}
 
-        <button
-          onClick={resetEverything}
-          className="mb-4 w-full rounded-2xl border border-green-300/40 py-3 text-sm text-green-100"
-        >
-          Scores und GPS-Daten zurücksetzen
-        </button>
+        {recommendation && (
+          <section className="mt-5 rounded-3xl bg-white p-5 text-slate-900 shadow-2xl">
+            <h2 className="mb-4 text-xl font-bold text-green-800">
+              ⛳ TomCaddys Empfehlung
+            </h2>
 
-        <p className="pb-4 text-center text-xs text-green-200">
-          TomCaddy · GolfPark Gudensberg
-        </p>
+            <div className="whitespace-pre-line rounded-2xl bg-green-50 p-4 leading-relaxed">
+              {recommendation}
+            </div>
+
+            <p className="mt-4 text-xs text-slate-500">
+              Hinweis: Die Empfehlung ist eine Entscheidungshilfe und ersetzt
+              keine eigene Einschätzung der Spielsituation.
+            </p>
+          </section>
+        )}
+
+        <footer className="mt-6 text-center text-xs text-green-200">
+          TomCaddy – dein digitaler Golfbegleiter
+        </footer>
       </div>
     </main>
   );
