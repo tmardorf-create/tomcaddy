@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 
-type Scores = Record<number, number>;
+type Hole = {
+  number: number;
+  par: number;
+};
 
-const holes = [
+type Scores = Record<number, string>;
+
+const holes: Hole[] = [
   { number: 1, par: 3 },
   { number: 2, par: 3 },
   { number: 3, par: 3 },
@@ -18,249 +22,294 @@ const holes = [
 ];
 
 export default function Home() {
-  const [currentHole, setCurrentHole] = useState(1);
+  const [currentHole, setCurrentHole] = useState<number>(1);
   const [scores, setScores] = useState<Scores>({});
-  const [gpsStatus, setGpsStatus] = useState("GPS nicht aktiviert");
+  const [gpsStatus, setGpsStatus] = useState<string>(
+    "GPS nicht aktiviert"
+  );
+  const [isLoaded, setIsLoaded] = useState<boolean>(false);
+
+  const currentHoleData = holes.find(
+    (hole) => hole.number === currentHole
+  );
+
+  const currentScore = scores[currentHole] ?? "";
+
+  const totalScore = useMemo(() => {
+    return Object.values(scores).reduce((total, score) => {
+      const numericScore = Number(score);
+
+      if (!Number.isFinite(numericScore)) {
+        return total;
+      }
+
+      return total + numericScore;
+    }, 0);
+  }, [scores]);
+
+  const playedHoles = Object.values(scores).filter(
+    (score) => score !== ""
+  ).length;
 
   useEffect(() => {
-    const savedScores = localStorage.getItem("tomcaddy-scores");
-    const savedHole = localStorage.getItem("tomcaddy-hole");
+    try {
+      const savedScores = window.localStorage.getItem("tomcaddy-scores");
+      const savedHole = window.localStorage.getItem("tomcaddy-current-hole");
 
-    if (savedScores) {
-      try {
-        setScores(JSON.parse(savedScores) as Scores);
-      } catch {
-        setScores({});
+      if (savedScores) {
+        const parsedScores = JSON.parse(savedScores) as Scores;
+        setScores(parsedScores);
       }
-    }
 
-    if (savedHole) {
-      const hole = Number(savedHole);
+      if (savedHole) {
+        const parsedHole = Number(savedHole);
 
-      if (holes.some((item) => item.number === hole)) {
-        setCurrentHole(hole);
+        if (holes.some((hole) => hole.number === parsedHole)) {
+          setCurrentHole(parsedHole);
+        }
       }
+    } catch {
+      setScores({});
+      setCurrentHole(1);
+    } finally {
+      setIsLoaded(true);
     }
   }, []);
 
-  function selectHole(hole: number) {
-    setCurrentHole(hole);
-    localStorage.setItem("tomcaddy-hole", String(hole));
+  useEffect(() => {
+    if (!isLoaded) {
+      return;
+    }
+
+    window.localStorage.setItem(
+      "tomcaddy-scores",
+      JSON.stringify(scores)
+    );
+
+    window.localStorage.setItem(
+      "tomcaddy-current-hole",
+      String(currentHole)
+    );
+  }, [scores, currentHole, isLoaded]);
+
+  function updateScore(value: string) {
+    if (value === "") {
+      setScores((previousScores) => {
+        const updatedScores = { ...previousScores };
+        delete updatedScores[currentHole];
+        return updatedScores;
+      });
+
+      return;
+    }
+
+    if (!/^\d+$/.test(value)) {
+      return;
+    }
+
+    setScores((previousScores) => ({
+      ...previousScores,
+      [currentHole]: value,
+    }));
   }
 
-  function saveScore(score: number) {
-    const updatedScores = {
-      ...scores,
-      [currentHole]: score,
-    };
+  function goToPreviousHole() {
+    setCurrentHole((hole) => Math.max(1, hole - 1));
+  }
 
-    setScores(updatedScores);
-    localStorage.setItem(
-      "tomcaddy-scores",
-      JSON.stringify(updatedScores)
-    );
+  function goToNextHole() {
+    setCurrentHole((hole) => Math.min(holes.length, hole + 1));
   }
 
   function activateGps() {
-    if (!navigator.geolocation) {
-      setGpsStatus("GPS wird nicht unterstützt");
+    if (!("geolocation" in navigator)) {
+      setGpsStatus("GPS wird von diesem Gerät nicht unterstützt");
       return;
     }
 
     setGpsStatus("GPS wird ermittelt ...");
 
     navigator.geolocation.getCurrentPosition(
-      () => {
-        setGpsStatus("GPS aktiviert");
+      (position) => {
+        const latitude = position.coords.latitude.toFixed(5);
+        const longitude = position.coords.longitude.toFixed(5);
+
+        setGpsStatus(`GPS aktiv: ${latitude}, ${longitude}`);
       },
       () => {
-        setGpsStatus("GPS konnte nicht aktiviert werden");
+        setGpsStatus(
+          "GPS konnte nicht aktiviert werden. Bitte Berechtigung prüfen."
+        );
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
       }
     );
   }
 
   function resetApp() {
+    const confirmed = window.confirm(
+      "Möchtest du wirklich alle gespeicherten Schläge löschen?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
     setScores({});
     setCurrentHole(1);
-    setGpsStatus("GPS nicht aktiviert");
-
-    localStorage.removeItem("tomcaddy-scores");
-    localStorage.removeItem("tomcaddy-hole");
+    window.localStorage.removeItem("tomcaddy-scores");
+    window.localStorage.removeItem("tomcaddy-current-hole");
   }
 
-  const totalScore = Object.values(scores).reduce(
-    (sum, score) => sum + score,
-    0
-  );
-
-  const totalPar = holes.reduce((sum, hole) => sum + hole.par, 0);
-
-  const difference = totalScore - totalPar;
+  if (!currentHoleData) {
+    return null;
+  }
 
   return (
-    <main className="min-h-screen bg-green-800 px-4 py-6 text-white">
-      <div className="mx-auto max-w-md">
+    <main className="min-h-screen bg-green-950 px-4 py-6 text-white">
+      <div className="mx-auto w-full max-w-2xl">
         <header className="mb-6 text-center">
-          <div className="text-5xl">🏌️</div>
-
-          <h1 className="mt-2 text-3xl font-bold">
-            TomCaddy
-          </h1>
-
-          <p className="text-green-100">
+          <p className="mb-2 text-sm font-medium uppercase tracking-widest text-green-300">
             GolfPark Gudensberg
+          </p>
+
+          <h1 className="text-4xl font-bold">TomCaddy</h1>
+
+          <p className="mt-2 text-green-200">
+            Deine digitale Scorekarte
           </p>
         </header>
 
-        <section className="mb-4 rounded-3xl bg-white p-5 text-gray-900 shadow-lg">
-          <div className="flex items-center justify-between">
+        <section className="mb-4 rounded-2xl bg-white p-5 text-gray-900 shadow-xl">
+          <div className="mb-4 flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500">
-                Aktuelles Loch
-              </p>
+              <p className="text-sm text-gray-500">Aktuelles Loch</p>
 
-              <p className="text-5xl font-bold text-green-800">
-                {currentHole}
-              </p>
+              <h2 className="text-3xl font-bold">
+                Loch {currentHoleData.number}
+              </h2>
             </div>
 
-            <div className="text-right">
-              <p className="text-sm text-gray-500">
-                Par
-              </p>
-
-              <p className="text-4xl font-bold">
-                {holes[currentHole - 1].par}
-              </p>
+            <div className="rounded-xl bg-green-100 px-4 py-3 text-center text-green-900">
+              <p className="text-xs uppercase">Par</p>
+              <p className="text-2xl font-bold">{currentHoleData.par}</p>
             </div>
           </div>
 
-          <p className="mt-5 text-center text-sm text-gray-500">
-            Score für Loch {currentHole}
+          <label
+            htmlFor="score"
+            className="mb-2 block text-sm font-semibold"
+          >
+            Schläge
+          </label>
+
+          <input
+            id="score"
+            type="number"
+            inputMode="numeric"
+            min="1"
+            step="1"
+            value={currentScore}
+            onChange={(event) => updateScore(event.target.value)}
+            placeholder="Schläge eingeben"
+            className="w-full rounded-xl border-2 border-green-200 px-4 py-4 text-center text-3xl font-bold outline-none focus:border-green-700"
+          />
+
+          <p className="mt-2 text-center text-xs text-gray-500">
+            Du kannst beliebig viele Schläge eintragen.
           </p>
 
-          <div className="mt-3 grid grid-cols-5 gap-2">
-            {[1, 2, 3, 4, 5].map((score) => (
-              <button
-                key={score}
-                type="button"
-                onClick={() => saveScore(score)}
-                className={`rounded-xl py-3 text-lg font-bold ${
-                  scores[currentHole] === score
-                    ? "bg-green-800 text-white"
-                    : "bg-gray-100 text-gray-900"
-                }`}
-              >
-                {score}
-              </button>
-            ))}
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={goToPreviousHole}
+              disabled={currentHole === 1}
+              className="rounded-xl bg-gray-200 px-4 py-3 font-semibold text-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              ← Zurück
+            </button>
+
+            <button
+              type="button"
+              onClick={goToNextHole}
+              disabled={currentHole === holes.length}
+              className="rounded-xl bg-green-700 px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Weiter →
+            </button>
           </div>
         </section>
 
-        <section className="mb-4 rounded-3xl bg-white p-5 text-gray-900 shadow-lg">
-          <h2 className="mb-3 text-lg font-bold">
-            GPS
-          </h2>
+        <section className="mb-4 rounded-2xl bg-green-900 p-5 shadow-xl">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-xl font-bold">Scorekarte</h2>
+
+            <div className="text-right">
+              <p className="text-xs text-green-300">Gesamt</p>
+              <p className="text-2xl font-bold">{totalScore}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+            {holes.map((hole) => {
+              const isActive = hole.number === currentHole;
+              const score = scores[hole.number];
+
+              return (
+                <button
+                  key={hole.number}
+                  type="button"
+                  onClick={() => setCurrentHole(hole.number)}
+                  className={`rounded-xl p-3 text-center transition ${
+                    isActive
+                      ? "bg-yellow-400 text-green-950"
+                      : "bg-green-800 text-white hover:bg-green-700"
+                  }`}
+                >
+                  <p className="text-xs">Loch</p>
+                  <p className="text-xl font-bold">{hole.number}</p>
+                  <p className="text-xs">Par {hole.par}</p>
+                  <p className="mt-1 text-lg font-bold">
+                    {score || "—"}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+
+          <p className="mt-4 text-center text-sm text-green-200">
+            {playedHoles} von {holes.length} Löchern gespielt
+          </p>
+        </section>
+
+        <section className="mb-4 rounded-2xl bg-white p-5 text-gray-900 shadow-xl">
+          <h2 className="mb-3 text-xl font-bold">GPS</h2>
+
+          <p className="mb-4 text-sm text-gray-600">{gpsStatus}</p>
 
           <button
             type="button"
             onClick={activateGps}
-            className="w-full rounded-xl bg-green-800 py-3 font-semibold text-white"
+            className="w-full rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700"
           >
-            GPS aktivieren
+            📍 GPS aktivieren
           </button>
-
-          <p className="mt-3 text-center text-sm text-gray-500">
-            {gpsStatus}
-          </p>
         </section>
-
-        <section className="mb-4 grid grid-cols-2 gap-3">
-          <div className="rounded-2xl bg-white p-4 text-center text-gray-900 shadow-lg">
-            <p className="text-sm text-gray-500">
-              Gesamt
-            </p>
-
-            <p className="text-3xl font-bold text-green-800">
-              {totalScore || "—"}
-            </p>
-          </div>
-
-          <div className="rounded-2xl bg-white p-4 text-center text-gray-900 shadow-lg">
-            <p className="text-sm text-gray-500">
-              Zu Par
-            </p>
-
-            <p className="text-3xl font-bold text-green-800">
-              {totalScore ? (difference > 0 ? `+${difference}` : difference) : "—"}
-            </p>
-          </div>
-        </section>
-
-        <section className="mb-4 rounded-3xl bg-white p-5 text-gray-900 shadow-lg">
-          <h2 className="mb-3 text-lg font-bold">
-            Bahnenübersicht
-          </h2>
-
-          <div className="grid grid-cols-3 gap-2">
-            {holes.map((hole) => (
-              <button
-                key={hole.number}
-                type="button"
-                onClick={() => selectHole(hole.number)}
-                className={`rounded-xl p-3 ${
-                  currentHole === hole.number
-                    ? "bg-green-800 text-white"
-                    : "bg-gray-100 text-gray-900"
-                }`}
-              >
-                <div className="text-xs">
-                  Loch
-                </div>
-
-                <div className="text-xl font-bold">
-                  {hole.number}
-                </div>
-
-                <div className="text-xs">
-                  Par {hole.par}
-                </div>
-
-                <div className="mt-1 text-lg font-bold">
-                  {scores[hole.number] ?? "—"}
-                </div>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <div className="mb-4 grid gap-3">
-          <Link
-            href="/spielempfehlung"
-            className="rounded-xl bg-white p-4 text-center font-bold text-green-800 shadow-lg"
-          >
-            🏌️ Spielempfehlung
-          </Link>
-
-          <Link
-            href="/regelcoach"
-            className="rounded-xl bg-white p-4 text-center font-bold text-green-800 shadow-lg"
-          >
-            ⚖️ Regel-Coach
-          </Link>
-        </div>
 
         <button
           type="button"
           onClick={resetApp}
-          className="w-full rounded-xl border border-green-200 py-3 text-sm text-green-100"
+          className="w-full rounded-xl border border-green-400 px-4 py-3 text-sm text-green-200 hover:bg-green-900"
         >
-          Daten zurücksetzen
+          Scorekarte zurücksetzen
         </button>
 
-        <p className="mt-5 text-center text-xs text-green-200">
-          TomCaddy · GolfPark Gudensberg
-        </p>
+        <footer className="mt-6 text-center text-xs text-green-300">
+          TomCaddy · Deine Golf-App
+        </footer>
       </div>
     </main>
   );
