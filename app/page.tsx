@@ -254,6 +254,18 @@ export default function Home() {
         </section>
 
         <div className="mb-4 grid gap-3">
-          <Link
-            href="/spielempfehlung"
-            className="rounded-2xl bg-white p-4 text-center font-bold text-[#075
+      <div className="mb-4 grid gap-3">
+  <Link
+    href="/spielempfehlung"
+    className="rounded-2xl bg-white p-4 text-center font-bold text-[#075b3b] shadow-lg"
+  >
+    🏌️ Spielempfehlung
+  </Link>
+
+  <Link
+    href="/regelcoach"
+    className="rounded-2xl bg-white p-4 text-center font-bold text-[#075b3b] shadow-lg"
+  >
+    ⚖️ Regel-Coach
+  </Link>
+</div>
