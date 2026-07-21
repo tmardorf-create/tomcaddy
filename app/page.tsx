@@ -132,11 +132,14 @@ export default function Home() {
     <main className="min-h-screen bg-[#06452f] px-4 py-6 text-white">
       <div className="mx-auto max-w-md">
         <header className="mb-6 flex justify-center">
-          <img
-            src="/tomcaddy-logo.png"
-            alt="TomCaddy Logo"
-            className="h-52 w-52 object-contain"
-          />
+          <div className="h-52 w-52 overflow-hidden rounded-full">
+            <img
+              src="/tomcaddy-logo.png"
+              alt="TomCaddy Logo"
+              className="h-full w-full rounded-full object-cover"
+              style={{ mixBlendMode: "multiply" }}
+            />
+          </div>
         </header>
 
         <section className="mb-4 rounded-3xl bg-white p-5 text-gray-900 shadow-lg">
@@ -204,78 +207,3 @@ export default function Home() {
             </button>
 
             <button
-              type="button"
-              onClick={() => changeScore(1)}
-              className="rounded-2xl bg-[#075b3b] py-4 text-2xl font-bold text-white"
-            >
-              +
-            </button>
-          </div>
-        </section>
-
-        <section className="mb-4 grid gap-3">
-          <Link
-            href="/spielempfehlung"
-            className="rounded-2xl bg-white p-4 text-center font-bold text-[#075b3b] shadow-lg transition hover:bg-green-50"
-          >
-            🏌️ Spielempfehlung
-          </Link>
-
-          <Link
-            href="/regelcoach"
-            className="rounded-2xl bg-white p-4 text-center font-bold text-[#075b3b] shadow-lg transition hover:bg-green-50"
-          >
-            ⚖️ Regel-Coach
-          </Link>
-        </section>
-
-        <section className="mb-4 rounded-3xl bg-white p-5 text-gray-900 shadow-lg">
-          <h2 className="mb-3 font-bold">
-            Bahnenübersicht
-          </h2>
-
-          <div className="grid grid-cols-3 gap-2">
-            {initialHoles.map((hole) => (
-              <button
-                key={hole.number}
-                type="button"
-                onClick={() => setCurrentHole(hole.number)}
-                className={`rounded-2xl p-3 text-center ${
-                  currentHole === hole.number
-                    ? "bg-[#075b3b] text-white"
-                    : "bg-gray-100 text-gray-900"
-                }`}
-              >
-                <div className="text-xs">Loch</div>
-
-                <div className="text-xl font-bold">
-                  {hole.number}
-                </div>
-
-                <div className="text-xs">
-                  Par {hole.par}
-                </div>
-
-                <div className="mt-1 text-lg font-bold">
-                  {scores[hole.number] ?? "—"}
-                </div>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <button
-          type="button"
-          onClick={resetEverything}
-          className="mb-4 w-full rounded-2xl border border-green-300/40 py-3 text-sm text-green-100"
-        >
-          Scores zurücksetzen
-        </button>
-
-        <p className="pb-4 text-center text-xs text-green-200">
-          TomCaddy · GolfPark Gudensberg
-        </p>
-      </div>
-    </main>
-  );
-}
