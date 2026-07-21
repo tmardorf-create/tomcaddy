@@ -217,12 +217,12 @@ export default function Home() {
     <main className="min-h-screen bg-[#06452f] px-4 py-6 text-white">
       <div className="mx-auto max-w-md">
         <header className="mb-6 flex justify-center">
-  <img
-    src="/tomcaddy-logo.png"
-    alt="TomCaddy Logo"
-    className="h-52 w-52 object-contain"
-  />
-</header>
+          <img
+            src="/tomcaddy-logo.png"
+            alt="TomCaddy Logo"
+            className="h-52 w-52 rounded-full object-cover"
+          />
+        </header>
 
         <section className="mb-4 rounded-3xl bg-white p-5 text-gray-900 shadow-lg">
           <div className="mb-4 flex items-center justify-between">
