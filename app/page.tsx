@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 type Position = {
   lat: number;
@@ -12,11 +13,6 @@ type Hole = {
   number: number;
   par: number;
   green?: Position;
-};
-
-type CaddyResponse = {
-  recommendation?: string;
-  error?: string;
 };
 
 const initialHoles: Hole[] = [
@@ -38,7 +34,6 @@ const totalPar = initialHoles.reduce(
 
 function distanceInMeters(start: Position, end: Position) {
   const earthRadius = 6371000;
-
   const lat1 = (start.lat * Math.PI) / 180;
   const lat2 = (end.lat * Math.PI) / 180;
   const deltaLat = ((end.lat - start.lat) * Math.PI) / 180;
@@ -53,85 +48,25 @@ function distanceInMeters(start: Position, end: Position) {
   return Math.round(
     earthRadius *
       2 *
-      Math.atan2(
-        Math.sqrt(value),
-        Math.sqrt(1 - value)
-      )
+      Math.atan2(Math.sqrt(value), Math.sqrt(1 - value))
   );
-}
-
-function removeWhiteBackground(image: HTMLImageElement): string {
-  const canvas = document.createElement("canvas");
-  const context = canvas.getContext("2d");
-
-  if (!context) {
-    return image.src;
-  }
-
-  canvas.width = image.naturalWidth;
-  canvas.height = image.naturalHeight;
-
-  context.drawImage(image, 0, 0);
-
-  const imageData = context.getImageData(
-    0,
-    0,
-    canvas.width,
-    canvas.height
-  );
-
-  const pixels = imageData.data;
-
-  for (let i = 0; i < pixels.length; i += 4) {
-    const red = pixels[i];
-    const green = pixels[i + 1];
-    const blue = pixels[i + 2];
-
-    if (red > 235 && green > 235 && blue > 235) {
-      pixels[i + 3] = 0;
-    }
-  }
-
-  context.putImageData(imageData, 0, 0);
-
-  return canvas.toDataURL("image/png");
 }
 
 export default function Home() {
-  const [holes] = useState<Hole[]>(initialHoles);
   const [currentHole, setCurrentHole] = useState(1);
   const [scores, setScores] = useState<Record<number, number>>({});
-  const [position, setPosition] =
-    useState<Position | null>(null);
+  const [position, setPosition] = useState<Position | null>(null);
   const [gpsActive, setGpsActive] = useState(false);
-  const [status, setStatus] = useState(
-    "GPS noch nicht aktiviert"
-  );
-  const [logoSource, setLogoSource] = useState(
-    "/tomcaddy-logo.png"
-  );
-
-  const [distance, setDistance] = useState("");
-  const [wind, setWind] = useState("Kein Wind");
-  const [lie, setLie] = useState("Fairway");
-  const [playerLevel, setPlayerLevel] =
-    useState("Anfänger");
-  const [recommendation, setRecommendation] =
-    useState("");
-  const [caddyLoading, setCaddyLoading] =
-    useState(false);
-  const [caddyError, setCaddyError] = useState("");
+  const [status, setStatus] = useState("GPS noch nicht aktiviert");
 
   const selectedHole =
-    holes.find((hole) => hole.number === currentHole) ??
-    holes[0];
+    initialHoles.find((hole) => hole.number === currentHole) ??
+    initialHoles[0];
 
-  const totalScore = useMemo(() => {
-    return Object.values(scores).reduce(
-      (sum, score) => sum + score,
-      0
-    );
-  }, [scores]);
+  const totalScore = useMemo(
+    () => Object.values(scores).reduce((sum, score) => sum + score, 0),
+    [scores]
+  );
 
   const scoreDifference =
     totalScore > 0 ? totalScore - totalPar : 0;
@@ -142,41 +77,39 @@ export default function Home() {
       : null;
 
   useEffect(() => {
-    const savedScores = localStorage.getItem(
-      "tomcaddy-scores"
-    );
+    const savedScores = localStorage.getItem("tomcaddy-scores");
+    const savedHole = localStorage.getItem("tomcaddy-current-hole");
+    const savedPosition = localStorage.getItem("tomcaddy-position");
 
-    if (savedScores) {
-      setScores(JSON.parse(savedScores));
-    }
+    if (savedScores) setScores(JSON.parse(savedScores));
+    if (savedHole) setCurrentHole(Number(savedHole));
+    if (savedPosition) setPosition(JSON.parse(savedPosition));
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(
-      "tomcaddy-scores",
-      JSON.stringify(scores)
-    );
+    localStorage.setItem("tomcaddy-scores", JSON.stringify(scores));
   }, [scores]);
 
   useEffect(() => {
-    const image = new Image();
+    localStorage.setItem(
+      "tomcaddy-current-hole",
+      String(currentHole)
+    );
+  }, [currentHole]);
 
-    image.onload = () => {
-      setLogoSource(removeWhiteBackground(image));
-    };
-
-    image.src = "/tomcaddy-logo.png";
-  }, []);
+  useEffect(() => {
+    if (position) {
+      localStorage.setItem(
+        "tomcaddy-position",
+        JSON.stringify(position)
+      );
+    }
+  }, [position]);
 
   function changeScore(amount: number) {
     setScores((currentScores) => {
-      const currentScore =
-        currentScores[currentHole] ?? 0;
-
-      const newScore = Math.max(
-        0,
-        currentScore + amount
-      );
+      const currentScore = currentScores[currentHole] ?? 0;
+      const newScore = Math.max(0, currentScore + amount);
 
       return {
         ...currentScores,
@@ -187,9 +120,7 @@ export default function Home() {
 
   function activateGps() {
     if (!navigator.geolocation) {
-      setStatus(
-        "GPS wird von diesem Gerät nicht unterstützt."
-      );
+      setStatus("GPS wird nicht unterstützt.");
       return;
     }
 
@@ -204,9 +135,7 @@ export default function Home() {
           accuracy: location.coords.accuracy,
         });
 
-        setStatus(
-          "GPS-Position erfolgreich ermittelt"
-        );
+        setStatus("GPS-Position erfolgreich ermittelt");
         setGpsActive(false);
       },
       () => {
@@ -221,65 +150,16 @@ export default function Home() {
     );
   }
 
-  async function getRecommendation(
-    event: FormEvent<HTMLFormElement>
-  ) {
-    event.preventDefault();
-
-    setCaddyLoading(true);
-    setRecommendation("");
-    setCaddyError("");
-
-    try {
-      const response = await fetch("/api/caddy", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          distance:
-            distanceToGreen ?? Number(distance || 0),
-          par: selectedHole.par,
-          wind,
-          lie,
-          hole: currentHole,
-          score: scores[currentHole] ?? 0,
-          playerLevel,
-        }),
-      });
-
-      const data: CaddyResponse =
-        await response.json();
-
-      if (!response.ok || data.error) {
-        throw new Error(
-          data.error ||
-            "TomCaddy konnte nicht antworten."
-        );
-      }
-
-      setRecommendation(
-        data.recommendation ||
-          "Keine Empfehlung erhalten."
-      );
-    } catch (error) {
-      setCaddyError(
-        error instanceof Error
-          ? error.message
-          : "Unbekannter Fehler."
-      );
-    } finally {
-      setCaddyLoading(false);
-    }
-  }
-
   function resetEverything() {
     setScores({});
     setPosition(null);
+    setCurrentHole(1);
     setGpsActive(false);
     setStatus("GPS noch nicht aktiviert");
-    setRecommendation("");
+
     localStorage.removeItem("tomcaddy-scores");
+    localStorage.removeItem("tomcaddy-position");
+    localStorage.removeItem("tomcaddy-current-hole");
   }
 
   return (
@@ -287,9 +167,9 @@ export default function Home() {
       <div className="mx-auto max-w-md">
         <header className="mb-6 flex justify-center">
           <img
-            src={logoSource}
+            src="/tomcaddy-logo.png"
             alt="TomCaddy Logo"
-            className="h-48 w-48 object-contain"
+            className="h-40 w-40 object-contain"
           />
         </header>
 
@@ -304,9 +184,7 @@ export default function Home() {
                 Loch {currentHole}
               </h1>
 
-              <p className="text-sm">
-                Par {selectedHole.par}
-              </p>
+              <p>Par {selectedHole.par}</p>
             </div>
 
             <div className="text-right">
@@ -341,14 +219,14 @@ export default function Home() {
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => changeScore(-1)}
-              className="rounded-2xl bg-gray-200 py-4 text-2xl font-bold text-gray-700 active:scale-95"
+              className="rounded-2xl bg-gray-200 py-4 text-2xl font-bold text-gray-700"
             >
               −
             </button>
 
             <button
               onClick={() => changeScore(1)}
-              className="rounded-2xl bg-[#075b3b] py-4 text-2xl font-bold text-white active:scale-95"
+              className="rounded-2xl bg-[#075b3b] py-4 text-2xl font-bold text-white"
             >
               +
             </button>
@@ -362,7 +240,7 @@ export default function Home() {
 
           <button
             onClick={activateGps}
-            className="w-full rounded-2xl bg-[#075b3b] py-3 font-semibold text-white active:scale-95"
+            className="w-full rounded-2xl bg-[#075b3b] py-3 font-semibold text-white"
           >
             {gpsActive
               ? "GPS wird ermittelt …"
@@ -380,104 +258,20 @@ export default function Home() {
           )}
         </section>
 
-        <section className="mb-4 rounded-3xl bg-white p-5 text-gray-900 shadow-lg">
-          <h2 className="mb-3 font-bold">
-            TomCaddy fragen
-          </h2>
+        <section className="mb-4 grid gap-3">
+          <Link
+            href="/spielempfehlung"
+            className="rounded-2xl bg-white p-4 text-center font-bold text-[#075b3b] shadow-lg"
+          >
+            🏌️ Spielempfehlung
+          </Link>
 
-          <form onSubmit={getRecommendation}>
-            <label className="mb-3 block text-sm">
-              Entfernung zum Grün in Metern
-              <input
-                type="number"
-                min="1"
-                value={distance}
-                onChange={(event) =>
-                  setDistance(event.target.value)
-                }
-                placeholder="z. B. 140"
-                className="mt-1 w-full rounded-xl border border-gray-300 p-3"
-                required={distanceToGreen === null}
-              />
-            </label>
-
-            <label className="mb-3 block text-sm">
-              Wind
-              <select
-                value={wind}
-                onChange={(event) =>
-                  setWind(event.target.value)
-                }
-                className="mt-1 w-full rounded-xl border border-gray-300 p-3"
-              >
-                <option>Kein Wind</option>
-                <option>Leichter Gegenwind</option>
-                <option>Starker Gegenwind</option>
-                <option>Rückenwind</option>
-                <option>Seitenwind</option>
-              </select>
-            </label>
-
-            <label className="mb-3 block text-sm">
-              Lage des Balls
-              <select
-                value={lie}
-                onChange={(event) =>
-                  setLie(event.target.value)
-                }
-                className="mt-1 w-full rounded-xl border border-gray-300 p-3"
-              >
-                <option>Fairway</option>
-                <option>Rough</option>
-                <option>Bunker</option>
-                <option>Wald</option>
-                <option>Abschlag</option>
-              </select>
-            </label>
-
-            <label className="block text-sm">
-              Dein Spielniveau
-              <select
-                value={playerLevel}
-                onChange={(event) =>
-                  setPlayerLevel(event.target.value)
-                }
-                className="mt-1 w-full rounded-xl border border-gray-300 p-3"
-              >
-                <option>Anfänger</option>
-                <option>Fortgeschritten</option>
-                <option>Sehr erfahren</option>
-              </select>
-            </label>
-
-            <button
-              type="submit"
-              disabled={caddyLoading}
-              className="mt-4 w-full rounded-2xl bg-[#075b3b] py-4 font-bold text-white active:scale-95 disabled:bg-gray-400"
-            >
-              {caddyLoading
-                ? "TomCaddy denkt nach …"
-                : "Schläger empfehlen"}
-            </button>
-          </form>
-
-          {caddyError && (
-            <p className="mt-4 rounded-xl bg-red-100 p-3 text-sm text-red-700">
-              {caddyError}
-            </p>
-          )}
-
-          {recommendation && (
-            <div className="mt-4 rounded-2xl bg-green-50 p-4 text-gray-800">
-              <h3 className="mb-2 font-bold text-[#075b3b]">
-                Empfehlung
-              </h3>
-
-              <p className="whitespace-pre-line text-sm leading-relaxed">
-                {recommendation}
-              </p>
-            </div>
-          )}
+          <Link
+            href="/regelcoach"
+            className="rounded-2xl bg-white p-4 text-center font-bold text-[#075b3b] shadow-lg"
+          >
+            ⚖️ Regel-Coach
+          </Link>
         </section>
 
         <section className="mb-4 rounded-3xl bg-white p-5 text-gray-900 shadow-lg">
@@ -486,30 +280,23 @@ export default function Home() {
           </h2>
 
           <div className="grid grid-cols-3 gap-2">
-            {holes.map((hole) => (
+            {initialHoles.map((hole) => (
               <button
                 key={hole.number}
-                onClick={() =>
-                  setCurrentHole(hole.number)
-                }
-                className={`rounded-2xl p-3 text-center active:scale-95 ${
+                onClick={() => setCurrentHole(hole.number)}
+                className={`rounded-2xl p-3 text-center ${
                   currentHole === hole.number
                     ? "bg-[#075b3b] text-white"
-                    : "bg-gray-100 text-gray-900"
+                    : "bg-gray-100"
                 }`}
               >
-                <div className="text-xs opacity-70">
-                  Loch
-                </div>
-
+                <div className="text-xs">Loch</div>
                 <div className="text-xl font-bold">
                   {hole.number}
                 </div>
-
                 <div className="text-xs">
                   Par {hole.par}
                 </div>
-
                 <div className="mt-1 text-lg font-bold">
                   {scores[hole.number] ?? "—"}
                 </div>
