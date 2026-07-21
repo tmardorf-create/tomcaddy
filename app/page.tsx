@@ -202,6 +202,8 @@ export default function Home() {
           </div>
         </section>
 
+        <GpsDistances hole={currentHole} />
+
         <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Link
             href={`/platzkarte?loch=${currentHole}`}
