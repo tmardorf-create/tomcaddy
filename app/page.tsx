@@ -3,16 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
-type Position = {
-  lat: number;
-  lon: number;
-  accuracy?: number;
-};
-
 type Hole = {
   number: number;
   par: number;
-  green?: Position;
 };
 
 const initialHoles: Hole[] = [
@@ -32,33 +25,9 @@ const totalPar = initialHoles.reduce(
   0
 );
 
-function distanceInMeters(start: Position, end: Position) {
-  const earthRadius = 6371000;
-
-  const lat1 = (start.lat * Math.PI) / 180;
-  const lat2 = (end.lat * Math.PI) / 180;
-  const deltaLat = ((end.lat - start.lat) * Math.PI) / 180;
-  const deltaLon = ((end.lon - start.lon) * Math.PI) / 180;
-
-  const value =
-    Math.sin(deltaLat / 2) ** 2 +
-    Math.cos(lat1) *
-      Math.cos(lat2) *
-      Math.sin(deltaLon / 2) ** 2;
-
-  return Math.round(
-    earthRadius *
-      2 *
-      Math.atan2(Math.sqrt(value), Math.sqrt(1 - value))
-  );
-}
-
 export default function Home() {
   const [currentHole, setCurrentHole] = useState(1);
   const [scores, setScores] = useState<Record<number, number>>({});
-  const [position, setPosition] = useState<Position | null>(null);
-  const [gpsActive, setGpsActive] = useState(false);
-  const [status, setStatus] = useState("GPS noch nicht aktiviert");
 
   const selectedHole =
     initialHoles.find((hole) => hole.number === currentHole) ??
@@ -76,16 +45,12 @@ export default function Home() {
   const scoreDifference =
     totalScore > 0 ? totalScore - totalPar : 0;
 
-  const distanceToGreen =
-    position && selectedHole.green
-      ? distanceInMeters(position, selectedHole.green)
-      : null;
-
   useEffect(() => {
     try {
       const savedScores = localStorage.getItem("tomcaddy-scores");
-      const savedHole = localStorage.getItem("tomcaddy-current-hole");
-      const savedPosition = localStorage.getItem("tomcaddy-position");
+      const savedHole = localStorage.getItem(
+        "tomcaddy-current-hole"
+      );
 
       if (savedScores) {
         setScores(JSON.parse(savedScores));
@@ -102,14 +67,9 @@ export default function Home() {
           setCurrentHole(parsedHole);
         }
       }
-
-      if (savedPosition) {
-        setPosition(JSON.parse(savedPosition));
-      }
     } catch {
       setScores({});
       setCurrentHole(1);
-      setPosition(null);
     }
   }, []);
 
@@ -126,15 +86,6 @@ export default function Home() {
       String(currentHole)
     );
   }, [currentHole]);
-
-  useEffect(() => {
-    if (position) {
-      localStorage.setItem(
-        "tomcaddy-position",
-        JSON.stringify(position)
-      );
-    }
-  }, [position]);
 
   function changeScore(amount: number) {
     setScores((currentScores) => {
@@ -169,47 +120,11 @@ export default function Home() {
     }
   }
 
-  function activateGps() {
-    if (!navigator.geolocation) {
-      setStatus("GPS wird nicht unterstützt.");
-      return;
-    }
-
-    setGpsActive(true);
-    setStatus("GPS wird ermittelt …");
-
-    navigator.geolocation.getCurrentPosition(
-      (location) => {
-        setPosition({
-          lat: location.coords.latitude,
-          lon: location.coords.longitude,
-          accuracy: location.coords.accuracy,
-        });
-
-        setStatus("GPS-Position erfolgreich ermittelt");
-        setGpsActive(false);
-      },
-      () => {
-        setGpsActive(false);
-        setStatus("GPS konnte nicht abgerufen werden.");
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
-      }
-    );
-  }
-
   function resetEverything() {
     setScores({});
-    setPosition(null);
     setCurrentHole(1);
-    setGpsActive(false);
-    setStatus("GPS noch nicht aktiviert");
 
     localStorage.removeItem("tomcaddy-scores");
-    localStorage.removeItem("tomcaddy-position");
     localStorage.removeItem("tomcaddy-current-hole");
   }
 
@@ -220,7 +135,7 @@ export default function Home() {
           <img
             src="/tomcaddy-logo.png"
             alt="TomCaddy Logo"
-            className="h-52 w-52 rounded-full object-cover"
+            className="h-52 w-52 object-contain"
           />
         </header>
 
@@ -298,32 +213,6 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="mb-4 rounded-3xl bg-white p-5 text-gray-900 shadow-lg">
-          <h2 className="mb-3 font-bold">
-            GPS und Entfernung
-          </h2>
-
-          <button
-            type="button"
-            onClick={activateGps}
-            className="w-full rounded-2xl bg-[#075b3b] py-3 font-semibold text-white"
-          >
-            {gpsActive
-              ? "GPS wird ermittelt …"
-              : "GPS aktivieren"}
-          </button>
-
-          <p className="mt-3 text-center text-sm text-gray-500">
-            {status}
-          </p>
-
-          {distanceToGreen !== null && (
-            <p className="mt-2 text-center text-xl font-bold text-[#075b3b]">
-              {distanceToGreen} m bis zum Grün
-            </p>
-          )}
-        </section>
-
         <section className="mb-4 grid gap-3">
           <Link
             href="/spielempfehlung"
@@ -380,7 +269,7 @@ export default function Home() {
           onClick={resetEverything}
           className="mb-4 w-full rounded-2xl border border-green-300/40 py-3 text-sm text-green-100"
         >
-          Scores und GPS-Daten zurücksetzen
+          Scores zurücksetzen
         </button>
 
         <p className="pb-4 text-center text-xs text-green-200">
