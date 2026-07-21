@@ -53,7 +53,7 @@ Wichtig:
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: process.env.MAMMOUTH_MODEL || "gpt-4.1",
+          model: process.env.MAMMOUTH_MODEL || "mammouth-recommended",
           messages: [
             {
               role: "system",
