@@ -21,11 +21,13 @@ const holes: Hole[] = [
 ];
 
 export default function Home() {
-  const [currentHole, setCurrentHole] = useState(1);
+  const [currentHole, setCurrentHole] = useState<number>(1);
   const [scores, setScores] = useState<Record<number, number>>({});
-  const [gpsActive, setGpsActive] = useState(false);
-  const [status, setStatus] = useState("GPS noch nicht aktiviert");
-  const [position, setPosition] = useState("");
+  const [gpsActive, setGpsActive] = useState<boolean>(false);
+  const [status, setStatus] = useState<string>(
+    "GPS noch nicht aktiviert"
+  );
+  const [position, setPosition] = useState<string>("");
 
   const selectedHole =
     holes.find((hole) => hole.number === currentHole) ?? holes[0];
@@ -47,7 +49,15 @@ export default function Home() {
 
     if (savedScores) {
       try {
-        setScores(JSON.parse(savedScores));
+        const parsedScores = JSON.parse(savedScores);
+
+        if (
+          parsedScores &&
+          typeof parsedScores === "object" &&
+          !Array.isArray(parsedScores)
+        ) {
+          setScores(parsedScores);
+        }
       } catch {
         setScores({});
       }
@@ -72,7 +82,7 @@ export default function Home() {
   }, []);
 
   function saveScore(score: number) {
-    const updatedScores = {
+    const updatedScores: Record<number, number> = {
       ...scores,
       [currentHole]: score,
     };
@@ -128,4 +138,132 @@ export default function Home() {
 
     localStorage.removeItem("tomcaddy-scores");
     localStorage.removeItem("tomcaddy-current-hole");
-    localStorage
+    localStorage.removeItem("tomcaddy-gps-status");
+    localStorage.removeItem("tomcaddy-position");
+  }
+
+  function selectHole(number: number) {
+    setCurrentHole(number);
+    localStorage.setItem(
+      "tomcaddy-current-hole",
+      String(number)
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-[#075b3b] px-4 py-6 text-white">
+      <div className="mx-auto max-w-md">
+        <header className="mb-6 text-center">
+          <div className="mb-2 text-5xl">🏌️</div>
+
+          <h1 className="text-3xl font-bold">
+            TomCaddy
+          </h1>
+
+          <p className="text-green-100">
+            GolfPark Gudensberg
+          </p>
+        </header>
+
+        <section className="mb-4 rounded-3xl bg-white p-5 text-gray-900 shadow-lg">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500">
+                Aktuelles Loch
+              </p>
+
+              <h2 className="text-4xl font-bold text-[#075b3b]">
+                {selectedHole.number}
+              </h2>
+            </div>
+
+            <div className="text-right">
+              <p className="text-sm text-gray-500">
+                Par
+              </p>
+
+              <p className="text-3xl font-bold">
+                {selectedHole.par}
+              </p>
+            </div>
+          </div>
+
+          <p className="mb-3 text-center text-sm text-gray-500">
+            Score für Loch {currentHole} eintragen
+          </p>
+
+          <div className="grid grid-cols-5 gap-2">
+            {[1, 2, 3, 4, 5].map((score) => (
+              <button
+                key={score}
+                type="button"
+                onClick={() => saveScore(score)}
+                className={`rounded-xl py-3 text-lg font-bold ${
+                  scores[currentHole] === score
+                    ? "bg-[#075b3b] text-white"
+                    : "bg-gray-100 text-gray-900"
+                }`}
+              >
+                {score}
+              </button>
+            ))}
+          </div>
+
+          {scores[currentHole] !== undefined && (
+            <p className="mt-4 text-center font-semibold text-[#075b3b]">
+              Eingetragener Score: {scores[currentHole]}
+            </p>
+          )}
+        </section>
+
+        <section className="mb-4 rounded-3xl bg-white p-5 text-gray-900 shadow-lg">
+          <h2 className="mb-4 text-lg font-bold">
+            GPS und Entfernung
+          </h2>
+
+          <button
+            type="button"
+            onClick={activateGps}
+            className="w-full rounded-2xl bg-[#075b3b] py-3 font-semibold text-white"
+          >
+            {gpsActive ? "GPS ist aktiviert" : "GPS aktivieren"}
+          </button>
+
+          <p className="mt-3 text-center text-sm text-gray-500">
+            {status}
+          </p>
+
+          {position && (
+            <p className="mt-2 text-center text-xs text-gray-400">
+              Standort: {position}
+            </p>
+          )}
+        </section>
+
+        <section className="mb-4 grid grid-cols-2 gap-3">
+          <div className="rounded-2xl bg-white p-4 text-center text-gray-900 shadow-lg">
+            <p className="text-sm text-gray-500">
+              Gesamt
+            </p>
+
+            <p className="text-3xl font-bold text-[#075b3b]">
+              {totalScore || "—"}
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-white p-4 text-center text-gray-900 shadow-lg">
+            <p className="text-sm text-gray-500">
+              Zu Par
+            </p>
+
+            <p className="text-3xl font-bold text-[#075b3b]">
+              {totalScore
+                ? difference > 0
+                  ? `+${difference}`
+                  : difference
+                : "—"}
+            </p>
+          </div>
+        </section>
+
+        <section className
