@@ -34,6 +34,7 @@ const totalPar = initialHoles.reduce(
 
 function distanceInMeters(start: Position, end: Position) {
   const earthRadius = 6371000;
+
   const lat1 = (start.lat * Math.PI) / 180;
   const lat2 = (end.lat * Math.PI) / 180;
   const deltaLat = ((end.lat - start.lat) * Math.PI) / 180;
@@ -64,7 +65,11 @@ export default function Home() {
     initialHoles[0];
 
   const totalScore = useMemo(
-    () => Object.values(scores).reduce((sum, score) => sum + score, 0),
+    () =>
+      Object.values(scores).reduce(
+        (sum, score) => sum + score,
+        0
+      ),
     [scores]
   );
 
@@ -78,16 +83,31 @@ export default function Home() {
 
   useEffect(() => {
     const savedScores = localStorage.getItem("tomcaddy-scores");
-    const savedHole = localStorage.getItem("tomcaddy-current-hole");
-    const savedPosition = localStorage.getItem("tomcaddy-position");
+    const savedHole = localStorage.getItem(
+      "tomcaddy-current-hole"
+    );
+    const savedPosition = localStorage.getItem(
+      "tomcaddy-position"
+    );
 
-    if (savedScores) setScores(JSON.parse(savedScores));
-    if (savedHole) setCurrentHole(Number(savedHole));
-    if (savedPosition) setPosition(JSON.parse(savedPosition));
+    if (savedScores) {
+      setScores(JSON.parse(savedScores));
+    }
+
+    if (savedHole) {
+      setCurrentHole(Number(savedHole));
+    }
+
+    if (savedPosition) {
+      setPosition(JSON.parse(savedPosition));
+    }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("tomcaddy-scores", JSON.stringify(scores));
+    localStorage.setItem(
+      "tomcaddy-scores",
+      JSON.stringify(scores)
+    );
   }, [scores]);
 
   useEffect(() => {
@@ -120,42 +140,3 @@ export default function Home() {
 
   function activateGps() {
     if (!navigator.geolocation) {
-      setStatus("GPS wird nicht unterstützt.");
-      return;
-    }
-
-    setGpsActive(true);
-    setStatus("GPS wird ermittelt …");
-
-    navigator.geolocation.getCurrentPosition(
-      (location) => {
-        setPosition({
-          lat: location.coords.latitude,
-          lon: location.coords.longitude,
-          accuracy: location.coords.accuracy,
-        });
-
-        setStatus("GPS-Position erfolgreich ermittelt");
-        setGpsActive(false);
-      },
-      () => {
-        setGpsActive(false);
-        setStatus("GPS konnte nicht abgerufen werden.");
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
-      }
-    );
-  }
-
-  function resetEverything() {
-    setScores({});
-    setPosition(null);
-    setCurrentHole(1);
-    setGpsActive(false);
-    setStatus("GPS noch nicht aktiviert");
-
-    localStorage.removeItem("tomcaddy-scores");
-    localStorage.removeItem
