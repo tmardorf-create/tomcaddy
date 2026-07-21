@@ -46,9 +46,7 @@ export default function Home() {
   useEffect(() => {
     try {
       const savedScores = localStorage.getItem("tomcaddy-scores");
-      const savedHole = localStorage.getItem(
-        "tomcaddy-current-hole"
-      );
+      const savedHole = localStorage.getItem("tomcaddy-current-hole");
 
       if (savedScores) {
         setScores(JSON.parse(savedScores));
@@ -126,76 +124,68 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-[#06452f] px-4 py-6 text-white">
-      <div className="mx-auto max-w-md">
-        <header className="mb-6 flex justify-center">
-          <div className="h-52 w-52 overflow-hidden rounded-full bg-white p-[2px]">
-            <img
-              src="/tomcaddy-logo.png"
-              alt="TomCaddy Logo"
-              className="h-full w-full rounded-full object-cover"
-            />
-          </div>
-        </header>
+    <main className="min-h-screen bg-white px-4 py-6 text-gray-900">
+      <div className="mx-auto max-w-3xl">
+        <div className="mb-6 text-center">
+          <img
+            src="/tomcaddy-logo-transparent.png"
+            alt="TomCaddy Logo"
+            className="mx-auto h-20 w-auto"
+          />
+        </div>
 
-        <section className="mb-4 rounded-3xl bg-white p-5 text-gray-900 shadow-lg">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500">
-                Aktuelles Loch
-              </p>
+        <div className="rounded-3xl bg-[#075b3b] p-6 text-center text-white shadow-lg">
+          <p className="text-sm uppercase tracking-wide opacity-80">
+            Aktuelles Loch
+          </p>
 
-              <h1 className="text-4xl font-bold text-[#075b3b]">
-                Loch {currentHole}
-              </h1>
+          <h1 className="mt-2 text-4xl font-bold">
+            Loch {currentHole}
+          </h1>
 
-              <p>Par {selectedHole.par}</p>
+          <p className="mt-2 text-lg">
+            Par {selectedHole.par}
+          </p>
+
+          <div className="mt-6">
+            <p className="text-sm opacity-80">Gesamtscore</p>
+
+            <div className="text-4xl font-bold">
+              {totalScore || "—"}
             </div>
 
-            <div className="text-right">
-              <p className="text-sm text-gray-500">
-                Gesamtscore
-              </p>
+            {totalScore > 0 && (
+              <div className="mt-1 text-sm">
+                {scoreDifference > 0
+                  ? `+${scoreDifference}`
+                  : scoreDifference}
+              </div>
+            )}
+          </div>
+        </div>
 
-              <p className="text-3xl font-bold text-[#075b3b]">
-                {totalScore || "—"}
-              </p>
+        <section className="mt-6 rounded-2xl bg-gray-50 p-5 shadow-sm">
+          <h2 className="text-xl font-bold">
+            Schläge auf Loch {currentHole}
+          </h2>
 
-              {totalScore > 0 && (
-                <p className="text-xs text-gray-500">
-                  {scoreDifference > 0
-                    ? `+${scoreDifference}`
-                    : scoreDifference}
-                </p>
-              )}
-            </div>
+          <div className="mt-4 text-center text-5xl font-bold text-[#075b3b]">
+            {scores[currentHole] ?? 0}
           </div>
 
-          <div className="mb-4 rounded-2xl bg-gray-100 p-5 text-center">
-            <p className="text-sm text-gray-500">
-              Schläge auf Loch {currentHole}
-            </p>
+          <input
+            type="number"
+            min="0"
+            value={scores[currentHole] ?? ""}
+            onChange={(event) =>
+              setFreeScore(event.target.value)
+            }
+            placeholder="Schlagzahl eingeben"
+            className="mt-4 w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-center text-lg text-gray-900 outline-none focus:border-[#075b3b]"
+          />
 
-            <p className="text-5xl font-bold text-[#075b3b]">
-              {scores[currentHole] ?? 0}
-            </p>
-
-            <input
-              type="number"
-              min="0"
-              step="1"
-              value={scores[currentHole] ?? ""}
-              onChange={(event) =>
-                setFreeScore(event.target.value)
-              }
-              placeholder="Schlagzahl eingeben"
-              className="mt-4 w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-center text-lg text-gray-900 outline-none focus:border-[#075b3b]"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
+          <div className="mt-4 grid grid-cols-2 gap-3">
             <button
-              type="button"
               onClick={() => changeScore(-1)}
               className="rounded-2xl bg-gray-200 py-4 text-2xl font-bold text-gray-700"
             >
@@ -203,7 +193,6 @@ export default function Home() {
             </button>
 
             <button
-              type="button"
               onClick={() => changeScore(1)}
               className="rounded-2xl bg-[#075b3b] py-4 text-2xl font-bold text-white"
             >
@@ -212,68 +201,84 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="mb-4 grid gap-3">
+        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Link
+            href={`/platzkarte?loch=${currentHole}`}
+            className="rounded-2xl bg-blue-100 px-4 py-4 text-center font-semibold text-blue-900"
+          >
+            🗺️ Platzkarte
+          </Link>
+
           <Link
             href="/spielempfehlung"
-            className="rounded-2xl bg-white p-4 text-center font-bold text-[#075b3b] shadow-lg"
+            className="rounded-2xl bg-green-100 px-4 py-4 text-center font-semibold text-green-900"
           >
-            🏌️ Spielempfehlung
+            ⛳ Spielempfehlung
           </Link>
 
           <Link
             href="/regelcoach"
-            className="rounded-2xl bg-white p-4 text-center font-bold text-[#075b3b] shadow-lg"
+            className="rounded-2xl bg-yellow-100 px-4 py-4 text-center font-semibold text-yellow-900"
           >
             ⚖️ Regel-Coach
           </Link>
-        </section>
+        </div>
 
-        <section className="mb-4 rounded-3xl bg-white p-5 text-gray-900 shadow-lg">
-          <h2 className="mb-3 font-bold">
+        <section className="mt-8">
+          <h2 className="text-xl font-bold">
             Bahnenübersicht
           </h2>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-5">
             {initialHoles.map((hole) => (
-              <button
+              <div
                 key={hole.number}
-                type="button"
-                onClick={() => setCurrentHole(hole.number)}
                 className={`rounded-2xl p-3 text-center ${
                   currentHole === hole.number
                     ? "bg-[#075b3b] text-white"
                     : "bg-gray-100 text-gray-900"
                 }`}
               >
-                <div className="text-xs">Loch</div>
+                <button
+                  onClick={() => setCurrentHole(hole.number)}
+                  className="w-full"
+                >
+                  <div className="text-sm">Loch</div>
 
-                <div className="text-xl font-bold">
-                  {hole.number}
-                </div>
+                  <div className="text-2xl font-bold">
+                    {hole.number}
+                  </div>
 
-                <div className="text-xs">
-                  Par {hole.par}
-                </div>
+                  <div className="text-xs">
+                    Par {hole.par}
+                  </div>
 
-                <div className="mt-1 text-lg font-bold">
-                  {scores[hole.number] ?? "—"}
-                </div>
-              </button>
+                  <div className="mt-1 font-semibold">
+                    {scores[hole.number] ?? "—"}
+                  </div>
+                </button>
+
+                <Link
+                  href={`/platzkarte?loch=${hole.number}`}
+                  className="mt-2 block text-xs underline"
+                >
+                  Karte
+                </Link>
+              </div>
             ))}
           </div>
         </section>
 
         <button
-          type="button"
           onClick={resetEverything}
-          className="mb-4 w-full rounded-2xl border border-green-300/40 py-3 text-sm text-green-100"
+          className="mt-8 w-full rounded-xl bg-red-100 py-3 font-semibold text-red-800"
         >
           Scores zurücksetzen
         </button>
 
-        <p className="pb-4 text-center text-xs text-green-200">
+        <footer className="mt-8 text-center text-sm text-gray-500">
           TomCaddy · GolfPark Gudensberg
-        </p>
+        </footer>
       </div>
     </main>
   );
