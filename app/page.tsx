@@ -3,12 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-type Hole = {
-  number: number;
-  par: number;
-};
+type Scores = Record<number, number>;
 
-const holes: Hole[] = [
+const holes = [
   { number: 1, par: 3 },
   { number: 2, par: 3 },
   { number: 3, par: 3 },
@@ -21,68 +18,38 @@ const holes: Hole[] = [
 ];
 
 export default function Home() {
-  const [currentHole, setCurrentHole] = useState<number>(1);
-  const [scores, setScores] = useState<Record<number, number>>({});
-  const [gpsActive, setGpsActive] = useState<boolean>(false);
-  const [status, setStatus] = useState<string>(
-    "GPS noch nicht aktiviert"
-  );
-  const [position, setPosition] = useState<string>("");
-
-  const selectedHole =
-    holes.find((hole) => hole.number === currentHole) ?? holes[0];
-
-  const totalPar = holes.reduce((sum, hole) => sum + hole.par, 0);
-
-  const totalScore = Object.values(scores).reduce(
-    (sum, score) => sum + score,
-    0
-  );
-
-  const difference = totalScore > 0 ? totalScore - totalPar : 0;
+  const [currentHole, setCurrentHole] = useState(1);
+  const [scores, setScores] = useState<Scores>({});
+  const [gpsStatus, setGpsStatus] = useState("GPS nicht aktiviert");
 
   useEffect(() => {
     const savedScores = localStorage.getItem("tomcaddy-scores");
-    const savedHole = localStorage.getItem("tomcaddy-current-hole");
-    const savedGps = localStorage.getItem("tomcaddy-gps-status");
-    const savedPosition = localStorage.getItem("tomcaddy-position");
+    const savedHole = localStorage.getItem("tomcaddy-hole");
 
     if (savedScores) {
       try {
-        const parsedScores = JSON.parse(savedScores);
-
-        if (
-          parsedScores &&
-          typeof parsedScores === "object" &&
-          !Array.isArray(parsedScores)
-        ) {
-          setScores(parsedScores);
-        }
+        setScores(JSON.parse(savedScores) as Scores);
       } catch {
         setScores({});
       }
     }
 
     if (savedHole) {
-      const holeNumber = Number(savedHole);
+      const hole = Number(savedHole);
 
-      if (holes.some((hole) => hole.number === holeNumber)) {
-        setCurrentHole(holeNumber);
+      if (holes.some((item) => item.number === hole)) {
+        setCurrentHole(hole);
       }
-    }
-
-    if (savedGps === "true") {
-      setGpsActive(true);
-      setStatus("GPS aktiviert");
-    }
-
-    if (savedPosition) {
-      setPosition(savedPosition);
     }
   }, []);
 
+  function selectHole(hole: number) {
+    setCurrentHole(hole);
+    localStorage.setItem("tomcaddy-hole", String(hole));
+  }
+
   function saveScore(score: number) {
-    const updatedScores: Record<number, number> = {
+    const updatedScores = {
       ...scores,
       [currentHole]: score,
     };
@@ -96,67 +63,47 @@ export default function Home() {
 
   function activateGps() {
     if (!navigator.geolocation) {
-      setStatus("GPS wird von diesem Gerät nicht unterstützt.");
+      setGpsStatus("GPS wird nicht unterstützt");
       return;
     }
 
-    setStatus("GPS wird ermittelt …");
+    setGpsStatus("GPS wird ermittelt ...");
 
     navigator.geolocation.getCurrentPosition(
-      (location) => {
-        const latitude = location.coords.latitude.toFixed(5);
-        const longitude = location.coords.longitude.toFixed(5);
-        const newPosition = `${latitude}, ${longitude}`;
-
-        setGpsActive(true);
-        setStatus("GPS erfolgreich aktiviert");
-        setPosition(newPosition);
-
-        localStorage.setItem("tomcaddy-gps-status", "true");
-        localStorage.setItem("tomcaddy-position", newPosition);
+      () => {
+        setGpsStatus("GPS aktiviert");
       },
       () => {
-        setGpsActive(false);
-        setStatus(
-          "GPS konnte nicht aktiviert werden. Bitte Standortzugriff erlauben."
-        );
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
+        setGpsStatus("GPS konnte nicht aktiviert werden");
       }
     );
   }
 
-  function resetEverything() {
+  function resetApp() {
     setScores({});
     setCurrentHole(1);
-    setGpsActive(false);
-    setStatus("GPS noch nicht aktiviert");
-    setPosition("");
+    setGpsStatus("GPS nicht aktiviert");
 
     localStorage.removeItem("tomcaddy-scores");
-    localStorage.removeItem("tomcaddy-current-hole");
-    localStorage.removeItem("tomcaddy-gps-status");
-    localStorage.removeItem("tomcaddy-position");
+    localStorage.removeItem("tomcaddy-hole");
   }
 
-  function selectHole(number: number) {
-    setCurrentHole(number);
-    localStorage.setItem(
-      "tomcaddy-current-hole",
-      String(number)
-    );
-  }
+  const totalScore = Object.values(scores).reduce(
+    (sum, score) => sum + score,
+    0
+  );
+
+  const totalPar = holes.reduce((sum, hole) => sum + hole.par, 0);
+
+  const difference = totalScore - totalPar;
 
   return (
-    <main className="min-h-screen bg-[#075b3b] px-4 py-6 text-white">
+    <main className="min-h-screen bg-green-800 px-4 py-6 text-white">
       <div className="mx-auto max-w-md">
         <header className="mb-6 text-center">
-          <div className="mb-2 text-5xl">🏌️</div>
+          <div className="text-5xl">🏌️</div>
 
-          <h1 className="text-3xl font-bold">
+          <h1 className="mt-2 text-3xl font-bold">
             TomCaddy
           </h1>
 
@@ -166,15 +113,15 @@ export default function Home() {
         </header>
 
         <section className="mb-4 rounded-3xl bg-white p-5 text-gray-900 shadow-lg">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500">
                 Aktuelles Loch
               </p>
 
-              <h2 className="text-4xl font-bold text-[#075b3b]">
-                {selectedHole.number}
-              </h2>
+              <p className="text-5xl font-bold text-green-800">
+                {currentHole}
+              </p>
             </div>
 
             <div className="text-right">
@@ -182,17 +129,17 @@ export default function Home() {
                 Par
               </p>
 
-              <p className="text-3xl font-bold">
-                {selectedHole.par}
+              <p className="text-4xl font-bold">
+                {holes[currentHole - 1].par}
               </p>
             </div>
           </div>
 
-          <p className="mb-3 text-center text-sm text-gray-500">
-            Score für Loch {currentHole} eintragen
+          <p className="mt-5 text-center text-sm text-gray-500">
+            Score für Loch {currentHole}
           </p>
 
-          <div className="grid grid-cols-5 gap-2">
+          <div className="mt-3 grid grid-cols-5 gap-2">
             {[1, 2, 3, 4, 5].map((score) => (
               <button
                 key={score}
@@ -200,7 +147,7 @@ export default function Home() {
                 onClick={() => saveScore(score)}
                 className={`rounded-xl py-3 text-lg font-bold ${
                   scores[currentHole] === score
-                    ? "bg-[#075b3b] text-white"
+                    ? "bg-green-800 text-white"
                     : "bg-gray-100 text-gray-900"
                 }`}
               >
@@ -208,36 +155,24 @@ export default function Home() {
               </button>
             ))}
           </div>
-
-          {scores[currentHole] !== undefined && (
-            <p className="mt-4 text-center font-semibold text-[#075b3b]">
-              Eingetragener Score: {scores[currentHole]}
-            </p>
-          )}
         </section>
 
         <section className="mb-4 rounded-3xl bg-white p-5 text-gray-900 shadow-lg">
-          <h2 className="mb-4 text-lg font-bold">
-            GPS und Entfernung
+          <h2 className="mb-3 text-lg font-bold">
+            GPS
           </h2>
 
           <button
             type="button"
             onClick={activateGps}
-            className="w-full rounded-2xl bg-[#075b3b] py-3 font-semibold text-white"
+            className="w-full rounded-xl bg-green-800 py-3 font-semibold text-white"
           >
-            {gpsActive ? "GPS ist aktiviert" : "GPS aktivieren"}
+            GPS aktivieren
           </button>
 
           <p className="mt-3 text-center text-sm text-gray-500">
-            {status}
+            {gpsStatus}
           </p>
-
-          {position && (
-            <p className="mt-2 text-center text-xs text-gray-400">
-              Standort: {position}
-            </p>
-          )}
         </section>
 
         <section className="mb-4 grid grid-cols-2 gap-3">
@@ -246,7 +181,7 @@ export default function Home() {
               Gesamt
             </p>
 
-            <p className="text-3xl font-bold text-[#075b3b]">
+            <p className="text-3xl font-bold text-green-800">
               {totalScore || "—"}
             </p>
           </div>
@@ -256,14 +191,77 @@ export default function Home() {
               Zu Par
             </p>
 
-            <p className="text-3xl font-bold text-[#075b3b]">
-              {totalScore
-                ? difference > 0
-                  ? `+${difference}`
-                  : difference
-                : "—"}
+            <p className="text-3xl font-bold text-green-800">
+              {totalScore ? (difference > 0 ? `+${difference}` : difference) : "—"}
             </p>
           </div>
         </section>
 
-        <section className
+        <section className="mb-4 rounded-3xl bg-white p-5 text-gray-900 shadow-lg">
+          <h2 className="mb-3 text-lg font-bold">
+            Bahnenübersicht
+          </h2>
+
+          <div className="grid grid-cols-3 gap-2">
+            {holes.map((hole) => (
+              <button
+                key={hole.number}
+                type="button"
+                onClick={() => selectHole(hole.number)}
+                className={`rounded-xl p-3 ${
+                  currentHole === hole.number
+                    ? "bg-green-800 text-white"
+                    : "bg-gray-100 text-gray-900"
+                }`}
+              >
+                <div className="text-xs">
+                  Loch
+                </div>
+
+                <div className="text-xl font-bold">
+                  {hole.number}
+                </div>
+
+                <div className="text-xs">
+                  Par {hole.par}
+                </div>
+
+                <div className="mt-1 text-lg font-bold">
+                  {scores[hole.number] ?? "—"}
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <div className="mb-4 grid gap-3">
+          <Link
+            href="/spielempfehlung"
+            className="rounded-xl bg-white p-4 text-center font-bold text-green-800 shadow-lg"
+          >
+            🏌️ Spielempfehlung
+          </Link>
+
+          <Link
+            href="/regelcoach"
+            className="rounded-xl bg-white p-4 text-center font-bold text-green-800 shadow-lg"
+          >
+            ⚖️ Regel-Coach
+          </Link>
+        </div>
+
+        <button
+          type="button"
+          onClick={resetApp}
+          className="w-full rounded-xl border border-green-200 py-3 text-sm text-green-100"
+        >
+          Daten zurücksetzen
+        </button>
+
+        <p className="mt-5 text-center text-xs text-green-200">
+          TomCaddy · GolfPark Gudensberg
+        </p>
+      </div>
+    </main>
+  );
+}
