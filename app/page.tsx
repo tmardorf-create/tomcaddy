@@ -25,7 +25,7 @@ export default function Home() {
   const [scores, setScores] = useState<Record<number, number>>({});
   const [gpsActive, setGpsActive] = useState(false);
   const [status, setStatus] = useState("GPS noch nicht aktiviert");
-  const [position, setPosition] = useState<string>("");
+  const [position, setPosition] = useState("");
 
   const selectedHole =
     holes.find((hole) => hole.number === currentHole) ?? holes[0];
@@ -46,11 +46,19 @@ export default function Home() {
     const savedPosition = localStorage.getItem("tomcaddy-position");
 
     if (savedScores) {
-      setScores(JSON.parse(savedScores));
+      try {
+        setScores(JSON.parse(savedScores));
+      } catch {
+        setScores({});
+      }
     }
 
     if (savedHole) {
-      setCurrentHole(Number(savedHole));
+      const holeNumber = Number(savedHole);
+
+      if (holes.some((hole) => hole.number === holeNumber)) {
+        setCurrentHole(holeNumber);
+      }
     }
 
     if (savedGps === "true") {
@@ -120,166 +128,4 @@ export default function Home() {
 
     localStorage.removeItem("tomcaddy-scores");
     localStorage.removeItem("tomcaddy-current-hole");
-    localStorage.removeItem("tomcaddy-gps-status");
-    localStorage.removeItem("tomcaddy-position");
-  }
-
-  function selectHole(number: number) {
-    setCurrentHole(number);
-    localStorage.setItem(
-      "tomcaddy-current-hole",
-      String(number)
-    );
-  }
-
-  return (
-    <main className="min-h-screen bg-[#075b3b] px-4 py-6 text-white">
-      <div className="mx-auto max-w-md">
-        <header className="mb-6 text-center">
-          <div className="mb-2 text-5xl">🏌️</div>
-          <h1 className="text-3xl font-bold">TomCaddy</h1>
-          <p className="text-green-100">
-            GolfPark Gudensberg
-          </p>
-        </header>
-
-        <section className="mb-4 rounded-3xl bg-white p-5 text-gray-900 shadow-lg">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500">Aktuelles Loch</p>
-              <h2 className="text-4xl font-bold text-[#075b3b]">
-                {selectedHole.number}
-              </h2>
-            </div>
-
-            <div className="text-right">
-              <p className="text-sm text-gray-500">Par</p>
-              <p className="text-3xl font-bold">
-                {selectedHole.par}
-              </p>
-            </div>
-          </div>
-
-          <p className="mb-3 text-center text-sm text-gray-500">
-            Score für Loch {currentHole} eintragen
-          </p>
-
-          <div className="grid grid-cols-5 gap-2">
-            {[1, 2, 3, 4, 5].map((score) => (
-              <button
-                key={score}
-                onClick={() => saveScore(score)}
-                className={`rounded-xl py-3 text-lg font-bold ${
-                  scores[currentHole] === score
-                    ? "bg-[#075b3b] text-white"
-                    : "bg-gray-100 text-gray-900"
-                }`}
-              >
-                {score}
-              </button>
-            ))}
-          </div>
-
-          {scores[currentHole] && (
-            <p className="mt-4 text-center font-semibold text-[#075b3b]">
-              Eingetragener Score: {scores[currentHole]}
-            </p>
-          )}
-        </section>
-
-        <section className="mb-4 rounded-3xl bg-white p-5 text-gray-900 shadow-lg">
-          <h2 className="mb-4 text-lg font-bold">
-            GPS und Entfernung
-          </h2>
-
-          <button
-            onClick={activateGps}
-            className="w-full rounded-2xl bg-[#075b3b] py-3 font-semibold text-white"
-          >
-            {gpsActive ? "GPS ist aktiviert" : "GPS aktivieren"}
-          </button>
-
-          <p className="mt-3 text-center text-sm text-gray-500">
-            {status}
-          </p>
-
-          {position && (
-            <p className="mt-2 text-center text-xs text-gray-400">
-              Standort: {position}
-            </p>
-          )}
-        </section>
-
-        <section className="mb-4 grid grid-cols-2 gap-3">
-          <div className="rounded-2xl bg-white p-4 text-center text-gray-900 shadow-lg">
-            <p className="text-sm text-gray-500">Gesamt</p>
-            <p className="text-3xl font-bold text-[#075b3b]">
-              {totalScore || "—"}
-            </p>
-          </div>
-
-          <div className="rounded-2xl bg-white p-4 text-center text-gray-900 shadow-lg">
-            <p className="text-sm text-gray-500">Zu Par</p>
-            <p className="text-3xl font-bold text-[#075b3b]">
-              {totalScore ? (difference > 0 ? `+${difference}` : difference) : "—"}
-            </p>
-          </div>
-        </section>
-
-        <section className="mb-4 rounded-3xl bg-white p-5 text-gray-900 shadow-lg">
-          <h2 className="mb-3 font-bold">Bahnenübersicht</h2>
-
-          <div className="grid grid-cols-3 gap-2">
-            {holes.map((hole) => (
-              <button
-                key={hole.number}
-                onClick={() => selectHole(hole.number)}
-                className={`rounded-2xl p-3 text-center ${
-                  currentHole === hole.number
-                    ? "bg-[#075b3b] text-white"
-                    : "bg-gray-100 text-gray-900"
-                }`}
-              >
-                <div className="text-xs">Loch</div>
-                <div className="text-xl font-bold">
-                  {hole.number}
-                </div>
-                <div className="text-xs">Par {hole.par}</div>
-                <div className="mt-1 text-lg font-bold">
-                  {scores[hole.number] ?? "—"}
-                </div>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <div className="mb-4 grid gap-3">
-            <div className="mb-4 grid gap-3">
-          <Link
-            href="/spielempfehlung"
-            className="rounded-2xl bg-white p-4 text-center font-bold text-[#075b3b] shadow-lg"
-          >
-            🏌️ Spielempfehlung
-          </Link>
-
-          <Link
-            href="/regelcoach"
-            className="rounded-2xl bg-white p-4 text-center font-bold text-[#075b3b] shadow-lg"
-          >
-            ⚖️ Regel-Coach
-          </Link>
-        </div>
-
-        <button
-          onClick={resetEverything}
-          className="mb-4 w-full rounded-2xl border border-green-200 py-3 text-sm text-green-100"
-        >
-          Scores und GPS-Daten zurücksetzen
-        </button>
-
-        <p className="pb-4 text-center text-xs text-green-200">
-          TomCaddy · GolfPark Gudensberg
-        </p>
-      </div>
-    </main>
-  );
+    localStorage
