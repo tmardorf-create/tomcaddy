@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import GpsDistances from "./components/GpsDistances";
+import GpsDistances from "./components/gps-distances.tsx";
 
 type Hole = {
   number: number;
