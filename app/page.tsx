@@ -210,12 +210,12 @@ export default function Home() {
             🗺️ Platzkarte
           </Link>
 
-          <Link
-            href="/spielempfehlung"
-            className="rounded-2xl bg-green-100 px-4 py-4 text-center font-semibold text-green-900"
-          >
-            ⛳ Spielempfehlung
-          </Link>
+     <Link
+  href="/spielempfehlung"
+  className="rounded-2xl bg-[#075b3b] px-4 py-3 text-center font-semibold text-white"
+>
+  💬 Manni fragen
+</Link>
 
           <Link
             href="/regelcoach"
