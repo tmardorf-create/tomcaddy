@@ -1,198 +1,136 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
+import {
+  FormEvent,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
-type CaddyResponse = {
-  recommendation?: string;
-  error?: string;
+type Message = {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
 };
 
-type QuickRecommendation = {
-  club: string;
-  distance: number;
-  note: string;
-};
-
-const holes = [
-  { number: 1, par: 3 },
-  { number: 2, par: 3 },
-  { number: 3, par: 3 },
-  { number: 4, par: 4 },
-  { number: 5, par: 4 },
-  { number: 6, par: 3 },
-  { number: 7, par: 3 },
-  { number: 8, par: 3 },
-  { number: 9, par: 3 },
-];
-
-const clubs = [
-  { name: "Driver", distance: 210 },
-  { name: "Holz 3", distance: 185 },
-  { name: "Hybrid", distance: 165 },
-  { name: "Eisen 5", distance: 150 },
-  { name: "Eisen 6", distance: 140 },
-  { name: "Eisen 7", distance: 130 },
-  { name: "Eisen 8", distance: 120 },
-  { name: "Eisen 9", distance: 110 },
-  { name: "Pitching Wedge", distance: 95 },
-  { name: "Sand Wedge", distance: 70 },
-];
-
-function getQuickRecommendation(
-  distance: number,
-  wind: string,
-  lie: string,
-): QuickRecommendation | null {
-  if (!distance || distance <= 0) {
-    return null;
-  }
-
-  let effectiveDistance = distance;
-  let note = "Normale Bedingungen";
-
-  if (wind === "Leichter Gegenwind") {
-    effectiveDistance *= 1.08;
-    note = "Eine Schlägerlänge wegen Gegenwind";
-  }
-
-  if (wind === "Starker Gegenwind") {
-    effectiveDistance *= 1.15;
-    note = "Mehr Länge wegen starkem Gegenwind";
-  }
-
-  if (wind === "Rückenwind") {
-    effectiveDistance *= 0.92;
-    note = "Etwas weniger Schläger wegen Rückenwind";
-  }
-
-  if (lie === "Rough") {
-    effectiveDistance *= 1.05;
-    note = "Etwas mehr Länge aus dem Rough";
-  }
-
-  if (lie === "Bunker") {
-    return {
-      club: "Sand Wedge",
-      distance: 70,
-      note: "Aus dem Bunker zuerst sicher aufs Grün spielen",
+type SpeechRecognitionEventLike = Event & {
+  results: {
+    [index: number]: {
+      [index: number]: {
+        transcript: string;
+      };
     };
-  }
-
-  if (lie === "Wald") {
-    return {
-      club: "Hybrid",
-      distance: 165,
-      note: "Sicherheits-Schlag zurück aufs Fairway",
-    };
-  }
-
-  const suitableClub =
-    clubs.find((club) => club.distance >= effectiveDistance) ??
-    clubs[clubs.length - 1];
-
-  return {
-    club: suitableClub.name,
-    distance: suitableClub.distance,
-    note,
   };
+};
+
+type SpeechRecognitionInstance = {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  start: () => void;
+  stop: () => void;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+};
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
+
+declare global {
+  interface Window {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  }
 }
 
-export default function Spielempfehlung() {
-  const [currentHole, setCurrentHole] = useState(1);
-  const [score, setScore] = useState(0);
-  const [distance, setDistance] = useState("");
-  const [wind, setWind] = useState("Kein Wind");
-  const [lie, setLie] = useState("Fairway");
-  const [playerLevel, setPlayerLevel] = useState("Anfänger");
-
-  const [quickRecommendation, setQuickRecommendation] =
-    useState<QuickRecommendation | null>(null);
-
-  const [aiRecommendation, setAiRecommendation] = useState("");
+export default function SpielempfehlungPage() {
+  const [question, setQuestion] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  const [listening, setListening] = useState(false);
   const [error, setError] = useState("");
 
-  const selectedHole =
-    holes.find((hole) => hole.number === currentHole) ?? holes[0];
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const nextMessageId = useRef(1);
 
   useEffect(() => {
-    const savedHole = localStorage.getItem("tomcaddy-current-hole");
-    const savedScores = localStorage.getItem("tomcaddy-scores");
-
-    if (savedHole) {
-      setCurrentHole(Number(savedHole));
-    }
-
-    if (savedScores) {
-      try {
-        const scores = JSON.parse(savedScores);
-        const holeNumber = Number(savedHole) || 1;
-        setScore(scores[holeNumber] ?? 0);
-      } catch {
-        setScore(0);
-      }
-    }
+    return () => {
+      recognitionRef.current?.stop();
+    };
   }, []);
 
-  function handleDistanceChange(value: string) {
-    setDistance(value);
-    setAiRecommendation("");
-    setError("");
+  function toggleVoiceInput() {
+    const Recognition =
+      window.SpeechRecognition ||
+      window.webkitSpeechRecognition;
 
-    const recommendation = getQuickRecommendation(
-      Number(value),
-      wind,
-      lie,
-    );
-
-    setQuickRecommendation(recommendation);
-  }
-
-  function handleWindChange(value: string) {
-    setWind(value);
-    setAiRecommendation("");
-
-    const recommendation = getQuickRecommendation(
-      Number(distance),
-      value,
-      lie,
-    );
-
-    setQuickRecommendation(recommendation);
-  }
-
-  function handleLieChange(value: string) {
-    setLie(value);
-    setAiRecommendation("");
-
-    const recommendation = getQuickRecommendation(
-      Number(distance),
-      wind,
-      value,
-    );
-
-    setQuickRecommendation(recommendation);
-  }
-
-  async function getRecommendation(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const numericDistance = Number(distance);
-
-    if (!numericDistance || numericDistance <= 0) {
-      setError("Bitte gib eine gültige Entfernung ein.");
+    if (!Recognition) {
+      setError(
+        "Spracheingabe wird auf diesem Browser nicht unterstützt. Bitte Safari aktualisieren oder die Frage eintippen.",
+      );
       return;
     }
 
-    const quick = getQuickRecommendation(
-      numericDistance,
-      wind,
-      lie,
-    );
+    if (listening) {
+      recognitionRef.current?.stop();
+      setListening(false);
+      return;
+    }
 
-    setQuickRecommendation(quick);
-    setAiRecommendation("");
+    const recognition = new Recognition();
+
+    recognition.lang = "de-DE";
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (event) => {
+      const transcript =
+        event.results[0]?.[0]?.transcript || "";
+
+      setQuestion(transcript);
+    };
+
+    recognition.onend = () => {
+      setListening(false);
+    };
+
+    recognition.onerror = () => {
+      setListening(false);
+      setError(
+        "Die Spracheingabe konnte nicht gestartet werden.",
+      );
+    };
+
+    recognitionRef.current = recognition;
+    setError("");
+    setListening(true);
+    recognition.start();
+  }
+
+  async function askCaddy(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const trimmedQuestion = question.trim();
+
+    if (!trimmedQuestion) {
+      setError("Bitte gib zuerst eine Frage ein.");
+      return;
+    }
+
+    if (trimmedQuestion.length > 1000) {
+      setError("Die Frage ist zu lang.");
+      return;
+    }
+
+    const userMessage: Message = {
+      id: nextMessageId.current++,
+      role: "user",
+      content: trimmedQuestion,
+    };
+
+    setMessages((current) => [...current, userMessage]);
+    setQuestion("");
     setError("");
     setLoading(true);
 
@@ -203,32 +141,34 @@ export default function Spielempfehlung() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          distance: numericDistance,
-          par: selectedHole.par,
-          wind,
-          lie,
-          hole: currentHole,
-          score,
-          playerLevel,
+          question: trimmedQuestion,
         }),
       });
 
-      const data: CaddyResponse = await response.json();
+      const data = await response.json();
 
       if (!response.ok || data.error) {
         throw new Error(
-          data.error || "Keine KI-Empfehlung erhalten.",
+          data.error || "Keine Antwort vom Caddy erhalten.",
         );
       }
 
-      setAiRecommendation(
-        data.recommendation || "Keine zusätzliche Erklärung erhalten.",
-      );
-    } catch (err) {
+      const assistantMessage: Message = {
+        id: nextMessageId.current++,
+        role: "assistant",
+        content:
+          data.answer || "Ich konnte leider keine Antwort erzeugen.",
+      };
+
+      setMessages((current) => [
+        ...current,
+        assistantMessage,
+      ]);
+    } catch (error) {
       setError(
-        err instanceof Error
-          ? err.message
-          : "Die KI-Empfehlung konnte nicht geladen werden.",
+        error instanceof Error
+          ? error.message
+          : "Der Caddy ist momentan nicht erreichbar.",
       );
     } finally {
       setLoading(false);
@@ -236,171 +176,117 @@ export default function Spielempfehlung() {
   }
 
   return (
-    <main className="min-h-screen bg-green-50 px-4 py-6">
+    <main className="min-h-screen bg-[#f4f7f4] px-4 py-6">
       <div className="mx-auto max-w-xl">
         <Link
           href="/"
-          className="mb-6 inline-block text-sm font-medium text-green-700"
+          className="text-sm font-semibold text-[#075b3b]"
         >
           ← Zurück zur Übersicht
         </Link>
 
-        <h1 className="mb-6 text-3xl font-bold text-green-950">
-          ⛳ Spielempfehlung
-        </h1>
+        <header className="mt-5">
+          <p className="text-sm font-semibold text-[#075b3b]">
+            ⛳ TomCaddy
+          </p>
+
+          <h1 className="mt-1 text-3xl font-bold text-gray-900">
+            Manni der Golfpro
+          </h1>
+
+          <p className="mt-2 text-gray-600">
+            Stelle eine konkrete Frage zu deinem nächsten Schlag,
+            den Regeln oder deiner Runde.
+          </p>
+        </header>
+
+        <section className="mt-6 space-y-3">
+          {messages.length === 0 && (
+            <div className="rounded-2xl bg-white p-5 shadow-sm">
+              <p className="font-semibold text-[#075b3b]">
+                Beispiele
+              </p>
+
+              <ul className="mt-3 space-y-2 text-sm text-gray-700">
+                <li>„Ball liegt 30 Meter vor dem Grün im Rough.“</li>
+                <li>„Darf ich den Ball hier besserlegen?“</li>
+                <li>„Wie spiele ich diesen Bunkerschlag?“</li>
+              </ul>
+            </div>
+          )}
+
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={
+                message.role === "user"
+                  ? "ml-8 rounded-2xl rounded-br-sm bg-[#075b3b] p-4 text-white"
+                  : "mr-8 rounded-2xl rounded-bl-sm bg-white p-4 text-gray-800 shadow-sm"
+              }
+            >
+              <p className="mb-1 text-xs font-bold opacity-70">
+                {message.role === "user"
+                  ? "Du"
+                  : "Manni der Golfpro"}
+              </p>
+
+              <p className="whitespace-pre-wrap text-sm leading-6">
+                {message.content}
+              </p>
+            </div>
+          ))}
+
+          {loading && (
+            <div className="mr-8 rounded-2xl bg-white p-4 text-sm text-gray-500 shadow-sm">
+              Manni überlegt kurz …
+            </div>
+          )}
+        </section>
 
         <form
-          onSubmit={getRecommendation}
-          className="space-y-4 rounded-2xl bg-white p-5 shadow"
+          onSubmit={askCaddy}
+          className="sticky bottom-3 mt-6 rounded-2xl bg-white p-3 shadow-lg"
         >
-          <div>
-            <label className="font-medium text-gray-800">
-              Aktuelles Loch
-            </label>
+          <textarea
+            value={question}
+            onChange={(event) => {
+              setQuestion(event.target.value);
+              setError("");
+            }}
+            placeholder="Deine Frage an Manni …"
+            rows={3}
+            maxLength={1000}
+            className="w-full resize-none rounded-xl border border-gray-300 p-3 text-base text-gray-900 outline-none focus:border-[#075b3b]"
+          />
 
-            <select
-              value={currentHole}
-              onChange={(event) => {
-                const hole = Number(event.target.value);
-                setCurrentHole(hole);
-                localStorage.setItem(
-                  "tomcaddy-current-hole",
-                  String(hole),
-                );
-              }}
-              className="mt-1 w-full rounded-xl border p-3"
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={toggleVoiceInput}
+              className={`flex-1 rounded-xl py-3 font-bold ${
+                listening
+                  ? "bg-red-600 text-white"
+                  : "bg-gray-100 text-gray-800"
+              }`}
             >
-              {holes.map((hole) => (
-                <option key={hole.number} value={hole.number}>
-                  Loch {hole.number} · Par {hole.par}
-                </option>
-              ))}
-            </select>
-          </div>
+              {listening ? "🔴 Aufnahme stoppen" : "🎙️ Sprechen"}
+            </button>
 
-          <div>
-            <label className="font-medium text-gray-800">
-              Entfernung zum Grün in Metern
-            </label>
-
-            <input
-              type="number"
-              inputMode="decimal"
-              min="1"
-              value={distance}
-              onChange={(event) =>
-                handleDistanceChange(event.target.value)
-              }
-              placeholder="z. B. 140"
-              className="mt-1 w-full rounded-xl border p-3"
-            />
-          </div>
-
-          <div>
-            <label className="font-medium text-gray-800">
-              Wind
-            </label>
-
-            <select
-              value={wind}
-              onChange={(event) =>
-                handleWindChange(event.target.value)
-              }
-              className="mt-1 w-full rounded-xl border p-3"
+            <button
+              type="submit"
+              disabled={loading || !question.trim()}
+              className="flex-1 rounded-xl bg-[#075b3b] py-3 font-bold text-white disabled:bg-gray-400"
             >
-              <option>Kein Wind</option>
-              <option>Leichter Gegenwind</option>
-              <option>Starker Gegenwind</option>
-              <option>Rückenwind</option>
-              <option>Seitenwind</option>
-            </select>
+              {loading ? "Wird gesendet …" : "Fragen"}
+            </button>
           </div>
 
-          <div>
-            <label className="font-medium text-gray-800">
-              Lage des Balls
-            </label>
-
-            <select
-              value={lie}
-              onChange={(event) =>
-                handleLieChange(event.target.value)
-              }
-              className="mt-1 w-full rounded-xl border p-3"
-            >
-              <option>Fairway</option>
-              <option>Rough</option>
-              <option>Bunker</option>
-              <option>Wald</option>
-              <option>Abschlag</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="font-medium text-gray-800">
-              Spielniveau
-            </label>
-
-            <select
-              value={playerLevel}
-              onChange={(event) =>
-                setPlayerLevel(event.target.value)
-              }
-              className="mt-1 w-full rounded-xl border p-3"
-            >
-              <option>Anfänger</option>
-              <option>Fortgeschritten</option>
-              <option>Sehr erfahren</option>
-            </select>
-          </div>
-
-          <button
-            type="submit"
-            className="w-full rounded-xl bg-green-700 p-3 font-bold text-white hover:bg-green-800"
-          >
-            {loading
-              ? "KI ergänzt die Empfehlung …"
-              : "Schläger empfehlen"}
-          </button>
+          {error && (
+            <p className="mt-3 rounded-xl bg-red-100 p-3 text-sm text-red-700">
+              {error}
+            </p>
+          )}
         </form>
-
-        {quickRecommendation && (
-          <section className="mt-5 rounded-2xl bg-green-700 p-5 text-white shadow">
-            <p className="text-sm font-medium uppercase opacity-80">
-              Sofort-Empfehlung
-            </p>
-
-            <h2 className="mt-1 text-3xl font-bold">
-              {quickRecommendation.club}
-            </h2>
-
-            <p className="mt-1 text-lg">
-              Zielweite: ca. {quickRecommendation.distance} m
-            </p>
-
-            <p className="mt-3 text-sm">
-              {quickRecommendation.note}
-            </p>
-          </section>
-        )}
-
-        {error && (
-          <div className="mt-5 rounded-xl bg-red-100 p-4 text-red-800">
-            {error}
-          </div>
-        )}
-
-        {aiRecommendation && (
-          <section className="mt-5 rounded-2xl bg-white p-5 shadow">
-            <h2 className="mb-3 text-xl font-bold text-green-950">
-              TomCaddys zusätzliche Einschätzung
-            </h2>
-
-            <p className="whitespace-pre-wrap text-gray-800">
-              {aiRecommendation}
-            </p>
-          </section>
-        )}
       </div>
     </main>
   );
