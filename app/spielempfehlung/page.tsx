@@ -8,6 +8,12 @@ type CaddyResponse = {
   error?: string;
 };
 
+type QuickRecommendation = {
+  club: string;
+  distance: number;
+  note: string;
+};
+
 const holes = [
   { number: 1, par: 3 },
   { number: 2, par: 3 },
@@ -20,64 +26,76 @@ const holes = [
   { number: 9, par: 3 },
 ];
 
-function createShortReason(
+const clubs = [
+  { name: "Driver", distance: 210 },
+  { name: "Holz 3", distance: 185 },
+  { name: "Hybrid", distance: 165 },
+  { name: "Eisen 5", distance: 150 },
+  { name: "Eisen 6", distance: 140 },
+  { name: "Eisen 7", distance: 130 },
+  { name: "Eisen 8", distance: 120 },
+  { name: "Eisen 9", distance: 110 },
+  { name: "Pitching Wedge", distance: 95 },
+  { name: "Sand Wedge", distance: 70 },
+];
+
+function getQuickRecommendation(
   distance: number,
   wind: string,
   lie: string,
-  playerLevel: string,
-  par: number,
-) {
-  const reasons: string[] = [];
+): QuickRecommendation | null {
+  if (!distance || distance <= 0) {
+    return null;
+  }
 
-  if (distance >= 190) {
-    reasons.push("Die große Entfernung spricht für einen Schläger mit mehr Reichweite");
-  } else if (distance >= 150) {
-    reasons.push("Die mittlere Distanz erfordert eine ausgewogene Kombination aus Länge und Kontrolle");
-  } else if (distance >= 100) {
-    reasons.push("Für diese Entfernung ist ein kontrollierter Annäherungsschlag sinnvoll");
-  } else {
-    reasons.push("Die kurze Distanz verlangt vor allem Präzision und Gefühl");
+  let effectiveDistance = distance;
+  let note = "Normale Bedingungen";
+
+  if (wind === "Leichter Gegenwind") {
+    effectiveDistance *= 1.08;
+    note = "Eine Schlägerlänge wegen Gegenwind";
   }
 
   if (wind === "Starker Gegenwind") {
-    reasons.push("wegen des starken Gegenwinds mit etwas mehr Reserve");
-  } else if (wind === "Leichter Gegenwind") {
-    reasons.push("weil der leichte Gegenwind die Flugweite reduziert");
-  } else if (wind === "Rückenwind") {
-    reasons.push("da der Rückenwind zusätzliche Länge bringt");
-  } else if (wind === "Seitenwind") {
-    reasons.push("um trotz Seitenwind möglichst kontrolliert zu spielen");
-  } else {
-    reasons.push("bei ruhigen Bedingungen mit normaler Flugkurve");
+    effectiveDistance *= 1.15;
+    note = "Mehr Länge wegen starkem Gegenwind";
+  }
+
+  if (wind === "Rückenwind") {
+    effectiveDistance *= 0.92;
+    note = "Etwas weniger Schläger wegen Rückenwind";
   }
 
   if (lie === "Rough") {
-    reasons.push("Die Lage im Rough macht einen sicheren Treffmoment besonders wichtig");
-  } else if (lie === "Bunker") {
-    reasons.push("Aus dem Bunker steht ein kontrollierter Schlag mit ausreichendem Loft im Vordergrund");
-  } else if (lie === "Wald") {
-    reasons.push("Aus dem Wald sollte zunächst Sicherheit vor maximaler Länge gehen");
-  } else if (lie === "Abschlag") {
-    reasons.push("Vom Abschlag kann der Schlag aktiv und mit vollerem Durchschwung ausgeführt werden");
-  } else {
-    reasons.push("Vom Fairway aus sind Länge und Präzision gut planbar");
+    effectiveDistance *= 1.05;
+    note = "Etwas mehr Länge aus dem Rough";
   }
 
-  if (playerLevel === "Anfänger") {
-    reasons.push("Für Anfänger ist dabei eine möglichst fehlerverzeihende Wahl sinnvoll");
-  } else if (playerLevel === "Fortgeschritten") {
-    reasons.push("Als fortgeschrittener Spieler kannst du die Distanz gezielt ausnutzen");
-  } else {
-    reasons.push("Mit viel Erfahrung kannst du die Flugkurve und Schlagform gezielt steuern");
+  if (lie === "Bunker") {
+    return {
+      club: "Sand Wedge",
+      distance: 70,
+      note: "Aus dem Bunker zuerst sicher aufs Grün spielen",
+    };
   }
 
-  if (par === 3) {
-    reasons.push("Am Par 3 sollte der erste Schlag möglichst direkt auf die Fahne vorbereitet werden");
-  } else {
-    reasons.push("Am Par 4 ist ein guter Positionsschlag für den weiteren Verlauf entscheidend");
+  if (lie === "Wald") {
+    return {
+      club: "Hybrid",
+      distance: 165,
+      note: "Sicherheits-Schlag zurück aufs Fairway",
+    };
   }
 
-  return `${reasons[0]}. ${reasons[1]}. ${reasons[2]}. ${reasons[3]}.`;
+  const suitableClub =
+    clubs.find((club) => club.distance >= effectiveDistance) ??
+    clubs[clubs.length - 1];
+
+  return {
+    club: suitableClub.name,
+    distance: suitableClub.distance,
+    note,
+  };
 }
 
 export default function Spielempfehlung() {
@@ -87,8 +105,11 @@ export default function Spielempfehlung() {
   const [wind, setWind] = useState("Kein Wind");
   const [lie, setLie] = useState("Fairway");
   const [playerLevel, setPlayerLevel] = useState("Anfänger");
-  const [recommendation, setRecommendation] = useState("");
-  const [shortReason, setShortReason] = useState("");
+
+  const [quickRecommendation, setQuickRecommendation] =
+    useState<QuickRecommendation | null>(null);
+
+  const [aiRecommendation, setAiRecommendation] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -106,22 +127,74 @@ export default function Spielempfehlung() {
     if (savedScores) {
       try {
         const scores = JSON.parse(savedScores);
-        setScore(scores[Number(savedHole) || 1] ?? 0);
+        const holeNumber = Number(savedHole) || 1;
+        setScore(scores[holeNumber] ?? 0);
       } catch {
         setScore(0);
       }
     }
   }, []);
 
+  function handleDistanceChange(value: string) {
+    setDistance(value);
+    setAiRecommendation("");
+    setError("");
+
+    const recommendation = getQuickRecommendation(
+      Number(value),
+      wind,
+      lie,
+    );
+
+    setQuickRecommendation(recommendation);
+  }
+
+  function handleWindChange(value: string) {
+    setWind(value);
+    setAiRecommendation("");
+
+    const recommendation = getQuickRecommendation(
+      Number(distance),
+      value,
+      lie,
+    );
+
+    setQuickRecommendation(recommendation);
+  }
+
+  function handleLieChange(value: string) {
+    setLie(value);
+    setAiRecommendation("");
+
+    const recommendation = getQuickRecommendation(
+      Number(distance),
+      wind,
+      value,
+    );
+
+    setQuickRecommendation(recommendation);
+  }
+
   async function getRecommendation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const numericDistance = Number(distance);
 
-    setLoading(true);
+    if (!numericDistance || numericDistance <= 0) {
+      setError("Bitte gib eine gültige Entfernung ein.");
+      return;
+    }
+
+    const quick = getQuickRecommendation(
+      numericDistance,
+      wind,
+      lie,
+    );
+
+    setQuickRecommendation(quick);
+    setAiRecommendation("");
     setError("");
-    setRecommendation("");
-    setShortReason("");
+    setLoading(true);
 
     try {
       const response = await fetch("/api/caddy", {
@@ -143,25 +216,19 @@ export default function Spielempfehlung() {
       const data: CaddyResponse = await response.json();
 
       if (!response.ok || data.error) {
-        throw new Error(data.error || "Keine Empfehlung erhalten.");
+        throw new Error(
+          data.error || "Keine KI-Empfehlung erhalten.",
+        );
       }
 
-      setRecommendation(
-        data.recommendation || "Keine Empfehlung erhalten.",
-      );
-
-      setShortReason(
-        createShortReason(
-          numericDistance,
-          wind,
-          lie,
-          playerLevel,
-          selectedHole.par,
-        ),
+      setAiRecommendation(
+        data.recommendation || "Keine zusätzliche Erklärung erhalten.",
       );
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Unbekannter Fehler.",
+        err instanceof Error
+          ? err.message
+          : "Die KI-Empfehlung konnte nicht geladen werden.",
       );
     } finally {
       setLoading(false);
@@ -169,26 +236,38 @@ export default function Spielempfehlung() {
   }
 
   return (
-    <main className="min-h-screen bg-[#06452f] px-4 py-6 text-white">
-      <div className="mx-auto max-w-md">
-        <Link href="/" className="text-sm text-green-100">
+    <main className="min-h-screen bg-green-50 px-4 py-6">
+      <div className="mx-auto max-w-xl">
+        <Link
+          href="/"
+          className="mb-6 inline-block text-sm font-medium text-green-700"
+        >
           ← Zurück zur Übersicht
         </Link>
 
-        <h1 className="my-6 text-3xl font-bold">
+        <h1 className="mb-6 text-3xl font-bold text-green-950">
           ⛳ Spielempfehlung
         </h1>
 
         <form
           onSubmit={getRecommendation}
-          className="rounded-3xl bg-white p-5 text-gray-900 shadow-lg"
+          className="space-y-4 rounded-2xl bg-white p-5 shadow"
         >
-          <label className="mb-4 block">
-            Aktuelles Loch
+          <div>
+            <label className="font-medium text-gray-800">
+              Aktuelles Loch
+            </label>
 
             <select
               value={currentHole}
-              onChange={(e) => setCurrentHole(Number(e.target.value))}
+              onChange={(event) => {
+                const hole = Number(event.target.value);
+                setCurrentHole(hole);
+                localStorage.setItem(
+                  "tomcaddy-current-hole",
+                  String(hole),
+                );
+              }}
               className="mt-1 w-full rounded-xl border p-3"
             >
               {holes.map((hole) => (
@@ -197,28 +276,36 @@ export default function Spielempfehlung() {
                 </option>
               ))}
             </select>
-          </label>
+          </div>
 
-          <label className="mb-4 block">
-            Entfernung zum Grün in Metern
+          <div>
+            <label className="font-medium text-gray-800">
+              Entfernung zum Grün in Metern
+            </label>
 
             <input
               type="number"
+              inputMode="decimal"
               min="1"
-              required
               value={distance}
-              onChange={(e) => setDistance(e.target.value)}
+              onChange={(event) =>
+                handleDistanceChange(event.target.value)
+              }
               placeholder="z. B. 140"
               className="mt-1 w-full rounded-xl border p-3"
             />
-          </label>
+          </div>
 
-          <label className="mb-4 block">
-            Wind
+          <div>
+            <label className="font-medium text-gray-800">
+              Wind
+            </label>
 
             <select
               value={wind}
-              onChange={(e) => setWind(e.target.value)}
+              onChange={(event) =>
+                handleWindChange(event.target.value)
+              }
               className="mt-1 w-full rounded-xl border p-3"
             >
               <option>Kein Wind</option>
@@ -227,14 +314,18 @@ export default function Spielempfehlung() {
               <option>Rückenwind</option>
               <option>Seitenwind</option>
             </select>
-          </label>
+          </div>
 
-          <label className="mb-4 block">
-            Lage des Balls
+          <div>
+            <label className="font-medium text-gray-800">
+              Lage des Balls
+            </label>
 
             <select
               value={lie}
-              onChange={(e) => setLie(e.target.value)}
+              onChange={(event) =>
+                handleLieChange(event.target.value)
+              }
               className="mt-1 w-full rounded-xl border p-3"
             >
               <option>Fairway</option>
@@ -243,62 +334,73 @@ export default function Spielempfehlung() {
               <option>Wald</option>
               <option>Abschlag</option>
             </select>
-          </label>
+          </div>
 
-          <label className="block">
-            Spielniveau
+          <div>
+            <label className="font-medium text-gray-800">
+              Spielniveau
+            </label>
 
             <select
               value={playerLevel}
-              onChange={(e) => setPlayerLevel(e.target.value)}
+              onChange={(event) =>
+                setPlayerLevel(event.target.value)
+              }
               className="mt-1 w-full rounded-xl border p-3"
             >
               <option>Anfänger</option>
               <option>Fortgeschritten</option>
               <option>Sehr erfahren</option>
             </select>
-          </label>
+          </div>
 
           <button
             type="submit"
-            disabled={loading}
-            className="mt-5 w-full rounded-2xl bg-[#075b3b] py-4 font-bold text-white disabled:bg-gray-400"
+            className="w-full rounded-xl bg-green-700 p-3 font-bold text-white hover:bg-green-800"
           >
             {loading
-              ? "TomCaddy denkt nach …"
+              ? "KI ergänzt die Empfehlung …"
               : "Schläger empfehlen"}
           </button>
-
-          {error && (
-            <p className="mt-4 rounded-xl bg-red-100 p-3 text-sm text-red-700">
-              {error}
-            </p>
-          )}
-
-          {recommendation && (
-            <div className="mt-4 rounded-2xl bg-green-50 p-4 text-gray-800">
-              <h2 className="mb-2 font-bold text-[#075b3b]">
-                Empfehlung
-              </h2>
-
-              <p className="whitespace-pre-line text-sm">
-                {recommendation}
-              </p>
-
-              {shortReason && (
-                <div className="mt-4 border-t border-green-200 pt-3">
-                  <h3 className="mb-1 font-bold text-[#075b3b]">
-                    Kurzbegründung
-                  </h3>
-
-                  <p className="text-sm">
-                    {shortReason}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
         </form>
+
+        {quickRecommendation && (
+          <section className="mt-5 rounded-2xl bg-green-700 p-5 text-white shadow">
+            <p className="text-sm font-medium uppercase opacity-80">
+              Sofort-Empfehlung
+            </p>
+
+            <h2 className="mt-1 text-3xl font-bold">
+              {quickRecommendation.club}
+            </h2>
+
+            <p className="mt-1 text-lg">
+              Zielweite: ca. {quickRecommendation.distance} m
+            </p>
+
+            <p className="mt-3 text-sm">
+              {quickRecommendation.note}
+            </p>
+          </section>
+        )}
+
+        {error && (
+          <div className="mt-5 rounded-xl bg-red-100 p-4 text-red-800">
+            {error}
+          </div>
+        )}
+
+        {aiRecommendation && (
+          <section className="mt-5 rounded-2xl bg-white p-5 shadow">
+            <h2 className="mb-3 text-xl font-bold text-green-950">
+              TomCaddys zusätzliche Einschätzung
+            </h2>
+
+            <p className="whitespace-pre-wrap text-gray-800">
+              {aiRecommendation}
+            </p>
+          </section>
+        )}
       </div>
     </main>
   );
