@@ -38,22 +38,71 @@ export default function Spielempfehlung() {
     const savedHole = localStorage.getItem("tomcaddy-current-hole");
     const savedScores = localStorage.getItem("tomcaddy-scores");
 
-    if (savedHole) setCurrentHole(Number(savedHole));
+    if (savedHole) {
+      setCurrentHole(Number(savedHole));
+    }
 
     if (savedScores) {
-      const scores = JSON.parse(savedScores);
-      setScore(scores[Number(savedHole) || 1] ?? 0);
+      try {
+        const scores = JSON.parse(savedScores);
+        setScore(scores[Number(savedHole) || 1] ?? 0);
+      } catch {
+        setScore(0);
+      }
     }
   }, []);
 
-  async function getRecommendation(
-    event: FormEvent<HTMLFormElement>
-  ) {
+  function getLocalRecommendation() {
+    const meters = Number(distance);
+
+    if (!meters || meters <= 0) {
+      return "Bitte zuerst eine gültige Entfernung eingeben.";
+    }
+
+    let club = "Eisen";
+
+    if (meters < 80) {
+      club = "Wedge";
+    } else if (meters < 105) {
+      club = "Pitching Wedge";
+    } else if (meters < 125) {
+      club = "9er-Eisen";
+    } else if (meters < 145) {
+      club = "8er-Eisen";
+    } else if (meters < 165) {
+      club = "7er-Eisen";
+    } else if (meters < 185) {
+      club = "6er-Eisen";
+    } else {
+      club = "5er-Eisen oder Hybrid";
+    }
+
+    let advice = "Ziele auf die Grünmitte.";
+
+    if (lie === "Bunker" || lie === "Wald") {
+      advice = "Spiele sicher zurück aufs Fairway.";
+    } else if (lie === "Rough") {
+      advice = "Nimm einen Schläger mehr und spiele kontrolliert.";
+    }
+
+    return `SCHLÄGER: ${club}
+SCHLAG: Kontrollierter Schlag mit ausreichend Höhe.
+ZIEL: Grünmitte
+RISIKO: ${advice}
+KURZBEGRÜNDUNG: Bei ${meters} m und ${wind.toLowerCase()} empfiehlt sich die sichere Variante.`;
+  }
+
+  async function getRecommendation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    setLoading(true);
+    const localRecommendation = getLocalRecommendation();
+
+    setRecommendation(localRecommendation);
     setError("");
-    setRecommendation("");
+    setLoading(false);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
 
     try {
       const response = await fetch("/api/caddy", {
@@ -61,6 +110,7 @@ export default function Spielempfehlung() {
         headers: {
           "Content-Type": "application/json",
         },
+        signal: controller.signal,
         body: JSON.stringify({
           distance: Number(distance),
           par: selectedHole.par,
@@ -74,140 +124,145 @@ export default function Spielempfehlung() {
 
       const data: CaddyResponse = await response.json();
 
-      if (!response.ok || data.error) {
-        throw new Error(
-          data.error || "Keine Empfehlung erhalten."
-        );
+      if (response.ok && data.recommendation) {
+        setRecommendation(data.recommendation);
       }
-
-      setRecommendation(
-        data.recommendation || "Keine Empfehlung erhalten."
-      );
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Unbekannter Fehler."
-      );
+    } catch {
+      // Die lokale Empfehlung bleibt sichtbar.
     } finally {
-      setLoading(false);
+      clearTimeout(timeout);
     }
   }
 
   return (
-    <main className="min-h-screen bg-[#06452f] px-4 py-6 text-white">
-      <div className="mx-auto max-w-md">
-        <Link href="/" className="text-sm text-green-100">
+    <main className="min-h-screen bg-green-50 px-4 py-8">
+      <div className="mx-auto max-w-2xl">
+        <Link
+          href="/"
+          className="mb-6 inline-block text-sm font-medium text-green-700 hover:text-green-900"
+        >
           ← Zurück zur Übersicht
         </Link>
 
-        <h1 className="my-6 text-3xl font-bold">
-          🏌️ Spielempfehlung
-        </h1>
+        <div className="rounded-2xl bg-white p-6 shadow-md">
+          <h1 className="mb-6 text-3xl font-bold text-green-900">
+            ⛳ Spielempfehlung
+          </h1>
 
-        <form
-          onSubmit={getRecommendation}
-          className="rounded-3xl bg-white p-5 text-gray-900 shadow-lg"
-        >
-          <label className="mb-4 block">
-            Aktuelles Loch
-            <select
-              value={currentHole}
-              onChange={(e) => setCurrentHole(Number(e.target.value))}
-              className="mt-1 w-full rounded-xl border p-3"
+          <form onSubmit={getRecommendation} className="space-y-5">
+            <div>
+              <label className="font-medium text-gray-700">
+                Aktuelles Loch
+              </label>
+
+              <select
+                value={currentHole}
+                onChange={(event) =>
+                  setCurrentHole(Number(event.target.value))
+                }
+                className="mt-1 w-full rounded-xl border p-3"
+              >
+                {holes.map((hole) => (
+                  <option key={hole.number} value={hole.number}>
+                    Loch {hole.number} · Par {hole.par}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="font-medium text-gray-700">
+                Entfernung zum Grün in Metern
+              </label>
+
+              <input
+                type="number"
+                min="1"
+                value={distance}
+                onChange={(event) => setDistance(event.target.value)}
+                placeholder="z. B. 140"
+                className="mt-1 w-full rounded-xl border p-3"
+              />
+            </div>
+
+            <div>
+              <label className="font-medium text-gray-700">Wind</label>
+
+              <select
+                value={wind}
+                onChange={(event) => setWind(event.target.value)}
+                className="mt-1 w-full rounded-xl border p-3"
+              >
+                <option>Kein Wind</option>
+                <option>Leichter Gegenwind</option>
+                <option>Starker Gegenwind</option>
+                <option>Rückenwind</option>
+                <option>Seitenwind</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="font-medium text-gray-700">
+                Lage des Balls
+              </label>
+
+              <select
+                value={lie}
+                onChange={(event) => setLie(event.target.value)}
+                className="mt-1 w-full rounded-xl border p-3"
+              >
+                <option>Fairway</option>
+                <option>Rough</option>
+                <option>Bunker</option>
+                <option>Wald</option>
+                <option>Abschlag</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="font-medium text-gray-700">
+                Spielniveau
+              </label>
+
+              <select
+                value={playerLevel}
+                onChange={(event) => setPlayerLevel(event.target.value)}
+                className="mt-1 w-full rounded-xl border p-3"
+              >
+                <option>Anfänger</option>
+                <option>Fortgeschritten</option>
+                <option>Sehr erfahren</option>
+              </select>
+            </div>
+
+            <button
+              type="submit"
+              className="w-full rounded-xl bg-green-700 px-4 py-3 font-semibold text-white transition hover:bg-green-800"
             >
-              {holes.map((hole) => (
-                <option key={hole.number} value={hole.number}>
-                  Loch {hole.number} · Par {hole.par}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="mb-4 block">
-            Entfernung zum Grün in Metern
-            <input
-              type="number"
-              min="1"
-              required
-              value={distance}
-              onChange={(e) => setDistance(e.target.value)}
-              placeholder="z. B. 140"
-              className="mt-1 w-full rounded-xl border p-3"
-            />
-          </label>
-
-          <label className="mb-4 block">
-            Wind
-            <select
-              value={wind}
-              onChange={(e) => setWind(e.target.value)}
-              className="mt-1 w-full rounded-xl border p-3"
-            >
-              <option>Kein Wind</option>
-              <option>Leichter Gegenwind</option>
-              <option>Starker Gegenwind</option>
-              <option>Rückenwind</option>
-              <option>Seitenwind</option>
-            </select>
-          </label>
-
-          <label className="mb-4 block">
-            Lage des Balls
-            <select
-              value={lie}
-              onChange={(e) => setLie(e.target.value)}
-              className="mt-1 w-full rounded-xl border p-3"
-            >
-              <option>Fairway</option>
-              <option>Rough</option>
-              <option>Bunker</option>
-              <option>Wald</option>
-              <option>Abschlag</option>
-            </select>
-          </label>
-
-          <label className="block">
-            Spielniveau
-            <select
-              value={playerLevel}
-              onChange={(e) => setPlayerLevel(e.target.value)}
-              className="mt-1 w-full rounded-xl border p-3"
-            >
-              <option>Anfänger</option>
-              <option>Fortgeschritten</option>
-              <option>Sehr erfahren</option>
-            </select>
-          </label>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="mt-5 w-full rounded-2xl bg-[#075b3b] py-4 font-bold text-white disabled:bg-gray-400"
-          >
-            {loading
-              ? "TomCaddy denkt nach …"
-              : "Schläger empfehlen"}
-          </button>
+              {loading
+                ? "TomCaddy denkt nach …"
+                : "Schläger empfehlen"}
+            </button>
+          </form>
 
           {error && (
-            <p className="mt-4 rounded-xl bg-red-100 p-3 text-sm text-red-700">
+            <div className="mt-5 rounded-xl bg-red-100 p-4 text-red-700">
               {error}
-            </p>
+            </div>
           )}
 
           {recommendation && (
-            <div className="mt-4 rounded-2xl bg-green-50 p-4 text-gray-800">
-              <h2 className="mb-2 font-bold text-[#075b3b]">
-                Empfehlung
+            <div className="mt-6 rounded-2xl bg-green-100 p-5">
+              <h2 className="mb-3 text-xl font-bold text-green-900">
+                🏌️ Empfehlung
               </h2>
 
-              <p className="whitespace-pre-line text-sm">
+              <p className="whitespace-pre-line text-gray-800">
                 {recommendation}
               </p>
             </div>
           )}
-        </form>
+        </div>
       </div>
     </main>
   );
