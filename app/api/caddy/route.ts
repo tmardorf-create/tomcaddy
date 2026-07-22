@@ -3,51 +3,27 @@ import { NextResponse } from "next/server";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    const { distance, par, wind, lie, hole, score, playerLevel } = body;
 
-    const {
-      distance,
-      par,
-      wind,
-      lie,
-      hole,
-      score,
-      playerLevel,
-    } = body;
+    const prompt = `Golf-Situation:
+Loch ${hole}, Par ${par}, Entfernung ${distance} m,
+Wind: ${wind}, Lage: ${lie}, Score: ${score}, Niveau: ${playerLevel}.
 
-    const prompt = `
-Du bist TomCaddy, ein freundlicher virtueller Golf-Caddy.
+Antworte auf Deutsch in maximal 5 kurzen Zeilen:
+SCHLÄGER:
+SCHLAG:
+ZIEL:
+RISIKO:
+KURZBEGRÜNDUNG:`;
 
-Analysiere diese Spielsituation:
-
-Bahn: ${hole || "unbekannt"}
-Par: ${par || "unbekannt"}
-Entfernung zum Ziel: ${distance || "unbekannt"} Meter
-Wind: ${wind || "kein Wind angegeben"}
-Balllage: ${lie || "unbekannt"}
-Aktueller Score: ${score || "unbekannt"}
-Spielstärke: ${playerLevel || "unbekannt"}
-
-Gib eine kurze, praktische Empfehlung auf Deutsch.
-
-Antworte exakt in diesem Format:
-
-SCHLÄGER: [Schläger]
-SCHLAG: [konkrete Empfehlung]
-ZIEL: [Zielpunkt]
-RISIKO: [mögliche Gefahr]
-KURZBEGRÜNDUNG: [maximal zwei Sätze]
-
-Wichtig:
-- Berücksichtige Gegenwind und Rückenwind.
-- Gib keine unrealistisch präzisen Garantien.
-- Wenn wichtige Daten fehlen, weise kurz darauf hin.
-- Die Empfehlung ist nur eine Entscheidungshilfe.
-`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
 
     const response = await fetch(
       "https://api.mammouth.ai/v1/chat/completions",
       {
         method: "POST",
+        signal: controller.signal,
         headers: {
           Authorization: `Bearer ${process.env.MAMMOUTH_API_KEY}`,
           "Content-Type": "application/json",
@@ -57,34 +33,34 @@ Wichtig:
           messages: [
             {
               role: "system",
-              content: "Du bist TomCaddy, ein erfahrener Golf-Caddy.",
+              content: "Du bist ein knapper, praktischer Golf-Caddy.",
             },
-            {
-              role: "user",
-              content: prompt,
-            },
+            { role: "user", content: prompt },
           ],
-          temperature: 0.3,
+          temperature: 0.2,
+          max_tokens: 120,
         }),
       }
     );
 
+    clearTimeout(timeout);
+
     if (!response.ok) {
-      const errorText = await response.text();
       return NextResponse.json(
-        { error: errorText },
+        { error: "Keine KI-Empfehlung verfügbar." },
         { status: response.status }
       );
     }
 
     const data = await response.json();
-    const recommendation = data.choices?.[0]?.message?.content;
 
-    return NextResponse.json({ recommendation });
+    return NextResponse.json({
+      recommendation: data.choices?.[0]?.message?.content,
+    });
   } catch {
     return NextResponse.json(
-      { error: "TomCaddy konnte keine Empfehlung erstellen." },
-      { status: 500 }
+      { error: "KI-Empfehlung nicht verfügbar." },
+      { status: 504 }
     );
   }
 }
