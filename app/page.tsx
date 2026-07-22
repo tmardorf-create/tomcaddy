@@ -205,8 +205,6 @@ export default function Home() {
   <h2 className="mb-4 text-xl font-bold">
     GPS und Entfernungen
   </h2>
-
-  <GpsDistances hole={currentHole} />
 </section>
 
         <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
