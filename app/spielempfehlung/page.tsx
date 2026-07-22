@@ -20,6 +20,66 @@ const holes = [
   { number: 9, par: 3 },
 ];
 
+function createShortReason(
+  distance: number,
+  wind: string,
+  lie: string,
+  playerLevel: string,
+  par: number,
+) {
+  const reasons: string[] = [];
+
+  if (distance >= 190) {
+    reasons.push("Die große Entfernung spricht für einen Schläger mit mehr Reichweite");
+  } else if (distance >= 150) {
+    reasons.push("Die mittlere Distanz erfordert eine ausgewogene Kombination aus Länge und Kontrolle");
+  } else if (distance >= 100) {
+    reasons.push("Für diese Entfernung ist ein kontrollierter Annäherungsschlag sinnvoll");
+  } else {
+    reasons.push("Die kurze Distanz verlangt vor allem Präzision und Gefühl");
+  }
+
+  if (wind === "Starker Gegenwind") {
+    reasons.push("wegen des starken Gegenwinds mit etwas mehr Reserve");
+  } else if (wind === "Leichter Gegenwind") {
+    reasons.push("weil der leichte Gegenwind die Flugweite reduziert");
+  } else if (wind === "Rückenwind") {
+    reasons.push("da der Rückenwind zusätzliche Länge bringt");
+  } else if (wind === "Seitenwind") {
+    reasons.push("um trotz Seitenwind möglichst kontrolliert zu spielen");
+  } else {
+    reasons.push("bei ruhigen Bedingungen mit normaler Flugkurve");
+  }
+
+  if (lie === "Rough") {
+    reasons.push("Die Lage im Rough macht einen sicheren Treffmoment besonders wichtig");
+  } else if (lie === "Bunker") {
+    reasons.push("Aus dem Bunker steht ein kontrollierter Schlag mit ausreichendem Loft im Vordergrund");
+  } else if (lie === "Wald") {
+    reasons.push("Aus dem Wald sollte zunächst Sicherheit vor maximaler Länge gehen");
+  } else if (lie === "Abschlag") {
+    reasons.push("Vom Abschlag kann der Schlag aktiv und mit vollerem Durchschwung ausgeführt werden");
+  } else {
+    reasons.push("Vom Fairway aus sind Länge und Präzision gut planbar");
+  }
+
+  if (playerLevel === "Anfänger") {
+    reasons.push("Für Anfänger ist dabei eine möglichst fehlerverzeihende Wahl sinnvoll");
+  } else if (playerLevel === "Fortgeschritten") {
+    reasons.push("Als fortgeschrittener Spieler kannst du die Distanz gezielt ausnutzen");
+  } else {
+    reasons.push("Mit viel Erfahrung kannst du die Flugkurve und Schlagform gezielt steuern");
+  }
+
+  if (par === 3) {
+    reasons.push("Am Par 3 sollte der erste Schlag möglichst direkt auf die Fahne vorbereitet werden");
+  } else {
+    reasons.push("Am Par 4 ist ein guter Positionsschlag für den weiteren Verlauf entscheidend");
+  }
+
+  return `${reasons[0]}. ${reasons[1]}. ${reasons[2]}. ${reasons[3]}.`;
+}
+
 export default function Spielempfehlung() {
   const [currentHole, setCurrentHole] = useState(1);
   const [score, setScore] = useState(0);
@@ -28,6 +88,7 @@ export default function Spielempfehlung() {
   const [lie, setLie] = useState("Fairway");
   const [playerLevel, setPlayerLevel] = useState("Anfänger");
   const [recommendation, setRecommendation] = useState("");
+  const [shortReason, setShortReason] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -52,57 +113,15 @@ export default function Spielempfehlung() {
     }
   }, []);
 
-  function getLocalRecommendation() {
-    const meters = Number(distance);
-
-    if (!meters || meters <= 0) {
-      return "Bitte zuerst eine gültige Entfernung eingeben.";
-    }
-
-    let club = "Eisen";
-
-    if (meters < 80) {
-      club = "Wedge";
-    } else if (meters < 105) {
-      club = "Pitching Wedge";
-    } else if (meters < 125) {
-      club = "9er-Eisen";
-    } else if (meters < 145) {
-      club = "8er-Eisen";
-    } else if (meters < 165) {
-      club = "7er-Eisen";
-    } else if (meters < 185) {
-      club = "6er-Eisen";
-    } else {
-      club = "5er-Eisen oder Hybrid";
-    }
-
-    let advice = "Ziele auf die Grünmitte.";
-
-    if (lie === "Bunker" || lie === "Wald") {
-      advice = "Spiele sicher zurück aufs Fairway.";
-    } else if (lie === "Rough") {
-      advice = "Nimm einen Schläger mehr und spiele kontrolliert.";
-    }
-
-    return `SCHLÄGER: ${club}
-SCHLAG: Kontrollierter Schlag mit ausreichend Höhe.
-ZIEL: Grünmitte
-RISIKO: ${advice}
-KURZBEGRÜNDUNG: Bei ${meters} m und ${wind.toLowerCase()} empfiehlt sich die sichere Variante.`;
-  }
-
   async function getRecommendation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const localRecommendation = getLocalRecommendation();
+    const numericDistance = Number(distance);
 
-    setRecommendation(localRecommendation);
+    setLoading(true);
     setError("");
-    setLoading(false);
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4000);
+    setRecommendation("");
+    setShortReason("");
 
     try {
       const response = await fetch("/api/caddy", {
@@ -110,9 +129,8 @@ KURZBEGRÜNDUNG: Bei ${meters} m und ${wind.toLowerCase()} empfiehlt sich die si
         headers: {
           "Content-Type": "application/json",
         },
-        signal: controller.signal,
         body: JSON.stringify({
-          distance: Number(distance),
+          distance: numericDistance,
           par: selectedHole.par,
           wind,
           lie,
@@ -124,145 +142,163 @@ KURZBEGRÜNDUNG: Bei ${meters} m und ${wind.toLowerCase()} empfiehlt sich die si
 
       const data: CaddyResponse = await response.json();
 
-      if (response.ok && data.recommendation) {
-        setRecommendation(data.recommendation);
+      if (!response.ok || data.error) {
+        throw new Error(data.error || "Keine Empfehlung erhalten.");
       }
-    } catch {
-      // Die lokale Empfehlung bleibt sichtbar.
+
+      setRecommendation(
+        data.recommendation || "Keine Empfehlung erhalten.",
+      );
+
+      setShortReason(
+        createShortReason(
+          numericDistance,
+          wind,
+          lie,
+          playerLevel,
+          selectedHole.par,
+        ),
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Unbekannter Fehler.",
+      );
     } finally {
-      clearTimeout(timeout);
+      setLoading(false);
     }
   }
 
   return (
-    <main className="min-h-screen bg-green-50 px-4 py-8">
-      <div className="mx-auto max-w-2xl">
-        <Link
-          href="/"
-          className="mb-6 inline-block text-sm font-medium text-green-700 hover:text-green-900"
-        >
+    <main className="min-h-screen bg-[#06452f] px-4 py-6 text-white">
+      <div className="mx-auto max-w-md">
+        <Link href="/" className="text-sm text-green-100">
           ← Zurück zur Übersicht
         </Link>
 
-        <div className="rounded-2xl bg-white p-6 shadow-md">
-          <h1 className="mb-6 text-3xl font-bold text-green-900">
-            ⛳ Spielempfehlung
-          </h1>
+        <h1 className="my-6 text-3xl font-bold">
+          ⛳ Spielempfehlung
+        </h1>
 
-          <form onSubmit={getRecommendation} className="space-y-5">
-            <div>
-              <label className="font-medium text-gray-700">
-                Aktuelles Loch
-              </label>
+        <form
+          onSubmit={getRecommendation}
+          className="rounded-3xl bg-white p-5 text-gray-900 shadow-lg"
+        >
+          <label className="mb-4 block">
+            Aktuelles Loch
 
-              <select
-                value={currentHole}
-                onChange={(event) =>
-                  setCurrentHole(Number(event.target.value))
-                }
-                className="mt-1 w-full rounded-xl border p-3"
-              >
-                {holes.map((hole) => (
-                  <option key={hole.number} value={hole.number}>
-                    Loch {hole.number} · Par {hole.par}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="font-medium text-gray-700">
-                Entfernung zum Grün in Metern
-              </label>
-
-              <input
-                type="number"
-                min="1"
-                value={distance}
-                onChange={(event) => setDistance(event.target.value)}
-                placeholder="z. B. 140"
-                className="mt-1 w-full rounded-xl border p-3"
-              />
-            </div>
-
-            <div>
-              <label className="font-medium text-gray-700">Wind</label>
-
-              <select
-                value={wind}
-                onChange={(event) => setWind(event.target.value)}
-                className="mt-1 w-full rounded-xl border p-3"
-              >
-                <option>Kein Wind</option>
-                <option>Leichter Gegenwind</option>
-                <option>Starker Gegenwind</option>
-                <option>Rückenwind</option>
-                <option>Seitenwind</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="font-medium text-gray-700">
-                Lage des Balls
-              </label>
-
-              <select
-                value={lie}
-                onChange={(event) => setLie(event.target.value)}
-                className="mt-1 w-full rounded-xl border p-3"
-              >
-                <option>Fairway</option>
-                <option>Rough</option>
-                <option>Bunker</option>
-                <option>Wald</option>
-                <option>Abschlag</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="font-medium text-gray-700">
-                Spielniveau
-              </label>
-
-              <select
-                value={playerLevel}
-                onChange={(event) => setPlayerLevel(event.target.value)}
-                className="mt-1 w-full rounded-xl border p-3"
-              >
-                <option>Anfänger</option>
-                <option>Fortgeschritten</option>
-                <option>Sehr erfahren</option>
-              </select>
-            </div>
-
-            <button
-              type="submit"
-              className="w-full rounded-xl bg-green-700 px-4 py-3 font-semibold text-white transition hover:bg-green-800"
+            <select
+              value={currentHole}
+              onChange={(e) => setCurrentHole(Number(e.target.value))}
+              className="mt-1 w-full rounded-xl border p-3"
             >
-              {loading
-                ? "TomCaddy denkt nach …"
-                : "Schläger empfehlen"}
-            </button>
-          </form>
+              {holes.map((hole) => (
+                <option key={hole.number} value={hole.number}>
+                  Loch {hole.number} · Par {hole.par}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="mb-4 block">
+            Entfernung zum Grün in Metern
+
+            <input
+              type="number"
+              min="1"
+              required
+              value={distance}
+              onChange={(e) => setDistance(e.target.value)}
+              placeholder="z. B. 140"
+              className="mt-1 w-full rounded-xl border p-3"
+            />
+          </label>
+
+          <label className="mb-4 block">
+            Wind
+
+            <select
+              value={wind}
+              onChange={(e) => setWind(e.target.value)}
+              className="mt-1 w-full rounded-xl border p-3"
+            >
+              <option>Kein Wind</option>
+              <option>Leichter Gegenwind</option>
+              <option>Starker Gegenwind</option>
+              <option>Rückenwind</option>
+              <option>Seitenwind</option>
+            </select>
+          </label>
+
+          <label className="mb-4 block">
+            Lage des Balls
+
+            <select
+              value={lie}
+              onChange={(e) => setLie(e.target.value)}
+              className="mt-1 w-full rounded-xl border p-3"
+            >
+              <option>Fairway</option>
+              <option>Rough</option>
+              <option>Bunker</option>
+              <option>Wald</option>
+              <option>Abschlag</option>
+            </select>
+          </label>
+
+          <label className="block">
+            Spielniveau
+
+            <select
+              value={playerLevel}
+              onChange={(e) => setPlayerLevel(e.target.value)}
+              className="mt-1 w-full rounded-xl border p-3"
+            >
+              <option>Anfänger</option>
+              <option>Fortgeschritten</option>
+              <option>Sehr erfahren</option>
+            </select>
+          </label>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="mt-5 w-full rounded-2xl bg-[#075b3b] py-4 font-bold text-white disabled:bg-gray-400"
+          >
+            {loading
+              ? "TomCaddy denkt nach …"
+              : "Schläger empfehlen"}
+          </button>
 
           {error && (
-            <div className="mt-5 rounded-xl bg-red-100 p-4 text-red-700">
+            <p className="mt-4 rounded-xl bg-red-100 p-3 text-sm text-red-700">
               {error}
-            </div>
+            </p>
           )}
 
           {recommendation && (
-            <div className="mt-6 rounded-2xl bg-green-100 p-5">
-              <h2 className="mb-3 text-xl font-bold text-green-900">
-                🏌️ Empfehlung
+            <div className="mt-4 rounded-2xl bg-green-50 p-4 text-gray-800">
+              <h2 className="mb-2 font-bold text-[#075b3b]">
+                Empfehlung
               </h2>
 
-              <p className="whitespace-pre-line text-gray-800">
+              <p className="whitespace-pre-line text-sm">
                 {recommendation}
               </p>
+
+              {shortReason && (
+                <div className="mt-4 border-t border-green-200 pt-3">
+                  <h3 className="mb-1 font-bold text-[#075b3b]">
+                    Kurzbegründung
+                  </h3>
+
+                  <p className="text-sm">
+                    {shortReason}
+                  </p>
+                </div>
+              )}
             </div>
           )}
-        </div>
+        </form>
       </div>
     </main>
   );
